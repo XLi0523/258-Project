@@ -38,7 +38,7 @@ other_grid:
 start_string:
     .asciiz "Press g to start. Use a,d,w,s. Press q to quit.\n"
 gameover_string:
-    .asciiz "Game Over\n"    
+    .asciiz "Game Over\n"   
 ##############################################################################
 # Mutable Data
 ##############################################################################
@@ -51,55 +51,55 @@ gameover_string:
 
     # Run the game.
 main:
-# Initialize the game
-# Draw the grid
-li $t1, 0x999999 # $t1 = grey
-lw $t0, ADDR_DSPL
-# top horizontal line
-addi $a0, $zero, 3
-addi $a1, $zero, 0
-addi $a2, $zero, 8
-jal draw_hor_line
+# Draw the playing field border
+    li $t1, 0x999999
+    lw $t0, ADDR_DSPL
+    addi $a0, $zero, 3
+    addi $a1, $zero, 0
+    addi $a2, $zero, 8
+    jal draw_hor_line
+    addi $a0, $zero, 3
+    addi $a1, $zero, 16
+    addi $a2, $zero, 8
+    jal draw_hor_line
+    addi $a0, $zero, 3
+    addi $a1, $zero, 1
+    addi $a2, $zero, 15
+    jal draw_ver_line
+    addi $a0, $zero, 10
+    addi $a1, $zero, 1
+    addi $a2, $zero, 15
+    jal draw_ver_line
 
-# bottom horizontal line
-addi $a0, $zero, 3
-addi $a1, $zero, 16
-addi $a2, $zero, 8
-jal draw_hor_line
+    li $v0, 4
+    la $a0, start_string
+    syscall
 
-# left vertical line
-addi $a0, $zero, 3
-addi $a1, $zero, 1
-addi $a2, $zero, 15
-jal draw_ver_line
-
-# right vertical line
-addi $a0, $zero, 10
-addi $a1, $zero, 1
-addi $a2, $zero, 15
-jal draw_ver_line
-
-# Print start instructions
-li $v0, 4
-la $a0, start_string
-syscall
+    j wait_start
 
 wait_start:
-lw $t9, ADDR_KBRD
-lw $t8, 0($t9)
-beq $t8, 1, start_input
-j wait_start
+    lw $t9, ADDR_KBRD
+    lw $t8, 0($t9)
+    beq $t8, 1, start_input
+    j wait_start
 
 start_input:
-lw $t2, 4($t9)
-beq $t2, 0x67, begin_game   # g
-beq $t2, 0x71, respond_to_q # q
-j wait_start
+    lw $t2, 4($t9)
+    beq $t2, 0x67, begin_game   # g
+    beq $t2, 0x71, respond_to_q # q
+    j wait_start
 
 begin_game:
-jal clear_grid_memory
-jal draw_new_gem
+    jal clear_grid_memory
+    jal draw_new_gem
+    jal draw_gem
 
+    # flush the start key so old 'g' does not linger
+    lw $t9, ADDR_KBRD
+    lw $t2, 4($t9)
+
+    j game_loop
+    
 game_loop:
     # 1a. Check if key has been pressed
     # 1b. Check which key has been pressed
@@ -110,258 +110,319 @@ game_loop:
 
     # 5. Go back to Step 1
 # check if any column is full at top => game over
-jal check_any_col_full
-beq $v0, $zero, game_continue
-
-li $v0, 4
-la $a0, gameover_string
-syscall
-li $v0, 10
-syscall
-
-game_continue:
 lw $t9, ADDR_KBRD
-lw $t8, 0($t9)
-beq $t8, 1, keyboard_input
+    lw $t8, 0($t9)
+    beq $t8, 1, keyboard_input
 
-# draw current falling gem
-jal draw_gem
+    jal draw_gem
 
-# sleep briefly
-li $v0, 32
-li $a0, 30
-syscall
-j game_loop
+    li $v0, 32
+    li $a0, 30
+    syscall
+
+    j game_loop
 
 keyboard_input:
-lw $t2, 4($t9)
-beq, $t2, 0x61, respond_to_a
-beq, $t2, 0x64, respond_to_d
-beq, $t2, 0x73, respond_to_s
-beq, $t2, 0x71, respond_to_w
-beq, $t2, 0x71, respond_to_q
-j game_loop
+    lw $t2, 4($t9)
+    beq $t2, 0x61, respond_to_a   # a
+    beq $t2, 0x64, respond_to_d   # d
+    beq $t2, 0x73, respond_to_s   # s
+    beq $t2, 0x77, respond_to_w   # w
+    beq $t2, 0x71, respond_to_q   # q
+    j game_loop
 
 respond_to_a:
-jal check_left_collision
-beq $v0, $zero, game_loop
-jal delete_gem
-addi $t7, $t7, -4
-j game_loop
+    jal check_left_collision
+    beq $v0, $zero, game_loop
+    jal delete_gem
+    addi $t7, $t7, -4
+    jal draw_gem
+    j game_loop
 
 respond_to_d:
-jal check_right_collision
-beq $v0, $zero, game_loop
-jal delete_gem
-addi $t7, $t7, 4
-j game_loop
+    jal check_right_collision
+    beq $v0, $zero, game_loop
+    jal delete_gem
+    addi $t7, $t7, 4
+    jal draw_gem
+    j game_loop
 
 respond_to_s:
-jal check_bottom_gem_collision
-beq $v0, $zero, gem_landed
-addi $t7, $t7, 128
-j game_loop
+    jal check_bottom_gem_collision
+    beq $v0, $zero, gem_landed
+    jal delete_gem
+    addi $t7, $t7, 128
+    jal draw_gem
+    j game_loop
 
 respond_to_w:
-la $t6, gem_colors
-lw $t1, 8($t6)
-lw $t2, 4($t6)
-sw $t2, 8($t6)
-lw $t2, 0($t6)
-sw $t2, 4($t6)
-sw $t1, 0($t6)
-j game_loop
+    la $t6, gem_colors
+    lw $t1, 8($t6)
+    lw $t2, 4($t6)
+    sw $t2, 8($t6)
+    lw $t2, 0($t6)
+    sw $t2, 4($t6)
+    sw $t1, 0($t6)
+    jal draw_gem
+    j game_loop
 
 respond_to_q:
-li $v0, 10
-syscall
+    li $v0, 10
+    syscall
 
 gem_landed:
-jal store_gems_in_grid
-
-match_loop:
-jal check_matches
-jal clear_matches
-beq $v0, $zero, no_more_matches
-jal drop_gems
-j match_loop
-
-no_more_matches:
-jal draw_new_gem
-j game_loop
+    jal store_gems_in_grid
+    jal draw_new_gem
+    jal draw_gem
+    j game_loop
 
 # Functions
 clear_grid_memory:
-la $t0, grid
-li $t1, 0
-li $t2 4096
+    la $t0, grid
+    li $t1, 0
+    li $t2, 4096
 
 clear_grid_loop:
-bge $t1, $t2, clear_other_start
-sw $zero, 0($t0)
-addi $t0, $t0, 4
-addi $t1, $t1, 4
-j clear_grid_loop
+    bge $t1, $t2, clear_other_start
+    sw $zero, 0($t0)
+    addi $t0, $t0, 4
+    addi $t1, $t1, 4
+    j clear_grid_loop
 
 clear_other_start:
-la $t0, other_grid
-li $t1, 0
+    la $t0, other_grid
+    li $t1, 0
 
 clear_other_loop:
-bge $t1, $t2, clear_grid_done
-sw $zero, 0($t0)
-addi $t0, $t0, 4
-addi $t1, $t1, 4
-j clear_other_loop
+    bge $t1, $t2, clear_grid_done
+    sw $zero, 0($t0)
+    addi $t0, $t0, 4
+    addi $t1, $t1, 4
+    j clear_other_loop
 
 clear_grid_done:
-jr $ra
+    jr $ra
 
-# Randomly generate a color for 1 gem
 gem_color:
-li $v0, 42
-li $a0, 0
-li $a1, 6
-syscall
-la $t4, colors
-sll $t5, $a0, 2
-addu $t4, $t4, $t5
-lw, $t1, 0($t4)
-jr $ra
+    li $v0, 42
+    li $a0, 0
+    li $a1, 6
+    syscall
+    la $t4, colors
+    sll $t5, $a0, 2
+    addu $t4, $t4, $t5
+    lw $t1, 0($t4)
+    jr $ra
 
-# Spawn a new vertical 3-gem column at top-middle
 draw_new_gem:
-addi $sp, $sp, -4
-sw $ra, 0($sp)
-la $t6, gem_colors
-jal gem_color
-sw $t1, 0($t6)
-jal gem_color
-sw $t1, 4($t6)
-jal gem_color
-sw $t1, 8($t6)
-lw $t0, ADDR_DSPL
-addi $t7, $t0, 152
-lw $ra, 0($sp)
-addi $sp, $sp, 4
-jr $ra
+    addi $sp, $sp, -4
+    sw $ra, 0($sp)
+
+    la $t6, gem_colors
+
+    jal gem_color
+    sw $t1, 0($t6)
+
+    jal gem_color
+    sw $t1, 4($t6)
+
+    jal gem_color
+    sw $t1, 8($t6)
+
+    lw $t0, ADDR_DSPL
+    addi $t7, $t0, 152
+
+    lw $ra, 0($sp)
+    addi $sp, $sp, 4
+    jr $ra
 
 draw_gem:
-la $t6, gem_colors
-lw $t1, 0($t6)
-sw $t1, 0($t7)
-lw $t1, 4($t6)
-sw $t1, 128($t7)
-lw $t1, 8($t6)
-sw $t1, 256($t7)
-jr $ra
+    la $t6, gem_colors
+    lw $t1, 0($t6)
+    sw $t1, 0($t7)
+    lw $t1, 4($t6)
+    sw $t1, 128($t7)
+    lw $t1, 8($t6)
+    sw $t1, 256($t7)
+    jr $ra
 
-# Erase current vertical falling column
 delete_gem:
-li $t1, 0x000000
-sw $t1, 0($t7)
-sw $t1, 128($t7)
-sw $t1, 256($t7)
-jr $ra
+    li $t1, 0x000000
+    sw $t1, 0($t7)
+    sw $t1, 128($t7)
+    sw $t1, 256($t7)
+    jr $ra
 
-# Store landed vertical column into grid memory
 store_gems_in_grid:
-addi $sp, $sp, -8
-sw $ra, 0($sp)
-sw $t0, 4($sp)
+    addi $sp, $sp, -8
+    sw $ra, 0($sp)
+    sw $t0, 4($sp)
 
-la $t6, gem_colors
-lw $t0, ADDR_DSPL
-sub $t2, $t7, $t0
-la $t3, grid
-add $t3, $t3, $t2
+    la $t6, gem_colors
+    lw $t0, ADDR_DSPL
+    sub $t2, $t7, $t0
+    la $t3, grid
+    add $t3, $t3, $t2
 
-lw $t1, 0($t6)
-sw $t1, 0($t3)
+    lw $t1, 0($t6)
+    sw $t1, 0($t3)
 
-lw $t1, 4($t6)
-sw $t1, 128($t3)
+    lw $t1, 4($t6)
+    sw $t1, 128($t3)
 
-lw $t1, 8($t6)
-sw $t1, 256($t3)
+    lw $t1, 8($t6)
+    sw $t1, 256($t3)
 
-lw $ra, 0($sp)
-lw $t0, 4($sp)
-addi $sp, $sp, 8
-jr $ra
+    lw $ra, 0($sp)
+    lw $t0, 4($sp)
+    addi $sp, $sp, 8
+    jr $ra
 
-# Game over
-check_col_full:
-# input a0 = playable column number 4..9
-lw $t0, ADDR_DSPL
-sll $t1, $a0, 2
-add $t0, $t0, $t1
-addi $t0, $t0, 128   # row 1
+get_color_grid:
+    lw $t0, ADDR_DSPL
+    sub $t2, $a0, $t0
+    la $t3, grid
+    add $t3, $t3, $t2
+    lw $v0, 0($t3)
+    jr $ra
 
-move $a0, $t0
-jal get_color_grid
-beq $v0, $zero, col_not_full
+check_left_collision:
+    addi $sp, $sp, -4
+    sw $ra, 0($sp)
 
-li $v0, 1
-jr $ra
+    lw $t0, ADDR_DSPL
+    sub $t1, $t7, $t0
+    andi $t2, $t1, 0x7f
+    srl $t2, $t2, 2
 
-col_not_full:
-li $v0, 0
-jr $ra
+    li $t3, 4
+    ble $t2, $t3, cannot_move_left
 
-check_any_col_full:
-li $t0, 4
+    addi $t4, $t7, -4
+    move $a0, $t4
+    jal get_color_grid
+    bne $v0, $zero, cannot_move_left
 
-check_any_col_loop:
-bgt $t0, 9, no_col_full
-move $a0, $t0
-jal check_col_full
-bne $v0, $zero, some_col_full
-addi $t0, $t0, 1
-j check_any_col_loop
+    addi $t4, $t7, 124
+    move $a0, $t4
+    jal get_color_grid
+    bne $v0, $zero, cannot_move_left
 
-some_col_full:
-li $v0, 1
-jr $ra
+    addi $t4, $t7, 252
+    move $a0, $t4
+    jal get_color_grid
+    bne $v0, $zero, cannot_move_left
 
-no_col_full:
-li $v0, 0
-jr $ra
-    
+    li $v0, 1
+    lw $ra, 0($sp)
+    addi $sp, $sp, 4
+    jr $ra
+
+cannot_move_left:
+    li $v0, 0
+    lw $ra, 0($sp)
+    addi $sp, $sp, 4
+    jr $ra
+
+check_right_collision:
+    addi $sp, $sp, -4
+    sw $ra, 0($sp)
+
+    lw $t0, ADDR_DSPL
+    sub $t1, $t7, $t0
+    andi $t2, $t1, 0x7f
+    srl $t2, $t2, 2
+
+    li $t3, 9
+    bge $t2, $t3, cannot_move_right
+
+    addi $t4, $t7, 4
+    move $a0, $t4
+    jal get_color_grid
+    bne $v0, $zero, cannot_move_right
+
+    addi $t4, $t7, 132
+    move $a0, $t4
+    jal get_color_grid
+    bne $v0, $zero, cannot_move_right
+
+    addi $t4, $t7, 260
+    move $a0, $t4
+    jal get_color_grid
+    bne $v0, $zero, cannot_move_right
+
+    li $v0, 1
+    lw $ra, 0($sp)
+    addi $sp, $sp, 4
+    jr $ra
+
+cannot_move_right:
+    li $v0, 0
+    lw $ra, 0($sp)
+    addi $sp, $sp, 4
+    jr $ra
+
+check_bottom_gem_collision:
+    addi $sp, $sp, -4
+    sw $ra, 0($sp)
+
+    lw $t0, ADDR_DSPL
+    sub $t1, $t7, $t0
+    srl $t2, $t1, 7
+
+    li $t3, 13
+    bge $t2, $t3, cannot_move_down
+
+    addi $t4, $t7, 384
+    move $a0, $t4
+    jal get_color_grid
+    bne $v0, $zero, cannot_move_down
+
+    li $v0, 1
+    lw $ra, 0($sp)
+    addi $sp, $sp, 4
+    jr $ra
+
+cannot_move_down:
+    li $v0, 0
+    lw $ra, 0($sp)
+    addi $sp, $sp, 4
+    jr $ra
+
 draw_hor_line:
-lw $t0, ADDR_DSPL
-sll $a0, $a0, 2
-add $t2, $t0, $a0
-sll $a1, $a1, 7
-add $t2, $t2, $a1
+    lw $t0, ADDR_DSPL
+    sll $a0, $a0, 2
+    add $t2, $t0, $a0
+    sll $a1, $a1, 7
+    add $t2, $t2, $a1
 
-sll $a2, $a2, 2
-add $t3, $t2, $a2
+    sll $a2, $a2, 2
+    add $t3, $t2, $a2
 
 loop_row_start:
-beq $t2, $t3, loop_row_end
-sw $t1, 0($t2)
-addi $t2, $t2, 4
-j loop_row_start
+    beq $t2, $t3, loop_row_end
+    sw $t1, 0($t2)
+    addi $t2, $t2, 4
+    j loop_row_start
 
 loop_row_end:
-jr $ra
+    jr $ra
 
 draw_ver_line:
-lw $t0, ADDR_DSPL
-sll $a0, $a0, 2
-add $t2, $t0, $a0
-sll $a1, $a1, 7
-add $t2, $t2, $a1
+    lw $t0, ADDR_DSPL
+    sll $a0, $a0, 2
+    add $t2, $t0, $a0
+    sll $a1, $a1, 7
+    add $t2, $t2, $a1
 
-sll $a2, $a2, 7
-add $t3, $t2, $a2
+    sll $a2, $a2, 7
+    add $t3, $t2, $a2
 
 loop_col_start:
-beq $t2, $t3, loop_col_end
-sw $t1, 0($t2)
-addi $t2, $t2, 128
-j loop_col_start
+    beq $t2, $t3, loop_col_end
+    sw $t1, 0($t2)
+    addi $t2, $t2, 128
+    j loop_col_start
 
 loop_col_end:
-jr $ra
+    jr $ra
