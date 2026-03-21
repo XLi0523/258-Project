@@ -110,7 +110,18 @@ game_loop:
 
     # 5. Go back to Step 1
 # check if any column is full at top => game over
-lw $t9, ADDR_KBRD
+    jal check_any_col_full
+    beq $v0, $zero, game_continue
+
+    li $v0, 4
+    la $a0, gameover_string
+    syscall
+
+    li $v0, 10
+    syscall
+
+game_continue:
+    lw $t9, ADDR_KBRD
     lw $t8, 0($t9)
     beq $t8, 1, keyboard_input
 
@@ -172,6 +183,15 @@ respond_to_q:
 
 gem_landed:
     jal store_gems_in_grid
+
+match_loop:
+    jal check_matches
+    jal clear_matches
+    beq $v0, $zero, no_more_matches
+    jal drop_gems
+    j match_loop
+
+no_more_matches:
     jal draw_new_gem
     jal draw_gem
     j game_loop
@@ -387,6 +407,453 @@ cannot_move_down:
     li $v0, 0
     lw $ra, 0($sp)
     addi $sp, $sp, 4
+    jr $ra
+
+##############################################################################
+# Matching logic
+##############################################################################
+
+# Clear other_grid, then scan vertical / horizontal / diagonal
+check_matches:
+    addi $sp, $sp, -4
+    sw $ra, 0($sp)
+
+    la $t0, other_grid
+    li $t1, 0
+    li $t2, 4096
+
+clear_matches_grid:
+    bge $t1, $t2, check_vertical_start
+    sw $zero, 0($t0)
+    addi $t0, $t0, 4
+    addi $t1, $t1, 4
+    j clear_matches_grid
+
+check_vertical_start:
+    jal check_vertical_matches
+    jal check_horizontal_match
+    jal check_diagonal_matches
+
+    lw $ra, 0($sp)
+    addi $sp, $sp, 4
+    jr $ra
+
+# Mark a position in other_grid
+mark_match:
+    lw $t0, ADDR_DSPL
+    sub $t1, $a0, $t0
+    la $t2, other_grid
+    add $t2, $t2, $t1
+    li $t3, 1
+    sw $t3, 0($t2)
+    jr $ra
+
+# Vertical match check
+check_vertical_matches:
+    addi $sp, $sp, -20
+    sw $ra, 0($sp)
+    sw $s0, 4($sp)
+    sw $s1, 8($sp)
+    sw $s2, 12($sp)
+    sw $s3, 16($sp)
+
+    li $s0, 4              # col = 4..9
+
+vertical_col_loop:
+    bgt $s0, 9, vertical_done
+
+    li $s1, 1              # row = 1..13
+
+vertical_row_loop:
+    bgt $s1, 13, next_vertical_col
+
+    lw $s2, ADDR_DSPL
+    sll $t0, $s0, 2
+    add $s2, $s2, $t0
+    sll $t1, $s1, 7
+    add $s2, $s2, $t1      # s2 = display address of current cell
+
+    move $a0, $s2
+    jal get_color_grid
+    move $s3, $v0
+    beq $s3, $zero, vertical_next_row
+
+    addi $a0, $s2, 128
+    jal get_color_grid
+    bne $v0, $s3, vertical_next_row
+
+    addi $a0, $s2, 256
+    jal get_color_grid
+    bne $v0, $s3, vertical_next_row
+
+    move $a0, $s2
+    jal mark_match
+    addi $a0, $s2, 128
+    jal mark_match
+    addi $a0, $s2, 256
+    jal mark_match
+
+vertical_next_row:
+    addi $s1, $s1, 1
+    j vertical_row_loop
+
+next_vertical_col:
+    addi $s0, $s0, 1
+    j vertical_col_loop
+
+vertical_done:
+    lw $ra, 0($sp)
+    lw $s0, 4($sp)
+    lw $s1, 8($sp)
+    lw $s2, 12($sp)
+    lw $s3, 16($sp)
+    addi $sp, $sp, 20
+    jr $ra
+
+# Horizontal match check
+check_horizontal_match:
+    addi $sp, $sp, -20
+    sw $ra, 0($sp)
+    sw $s0, 4($sp)
+    sw $s1, 8($sp)
+    sw $s2, 12($sp)
+    sw $s3, 16($sp)
+
+    li $s1, 1              # row = 1..15
+
+horizontal_row_loop:
+    bgt $s1, 15, horizontal_done
+
+    li $s0, 4              # col = 4..7
+
+horizontal_col_loop:
+    bgt $s0, 7, next_horizontal_row
+
+    lw $s2, ADDR_DSPL
+    sll $t0, $s0, 2
+    add $s2, $s2, $t0
+    sll $t1, $s1, 7
+    add $s2, $s2, $t1      # s2 = display address
+
+    move $a0, $s2
+    jal get_color_grid
+    move $s3, $v0
+    beq $s3, $zero, horizontal_next_col
+
+    addi $a0, $s2, 4
+    jal get_color_grid
+    bne $v0, $s3, horizontal_next_col
+
+    addi $a0, $s2, 8
+    jal get_color_grid
+    bne $v0, $s3, horizontal_next_col
+
+    move $a0, $s2
+    jal mark_match
+    addi $a0, $s2, 4
+    jal mark_match
+    addi $a0, $s2, 8
+    jal mark_match
+
+horizontal_next_col:
+    addi $s0, $s0, 1
+    j horizontal_col_loop
+
+next_horizontal_row:
+    addi $s1, $s1, 1
+    j horizontal_row_loop
+
+horizontal_done:
+    lw $ra, 0($sp)
+    lw $s0, 4($sp)
+    lw $s1, 8($sp)
+    lw $s2, 12($sp)
+    lw $s3, 16($sp)
+    addi $sp, $sp, 20
+    jr $ra
+
+# Diagonal match check
+check_diagonal_matches:
+    addi $sp, $sp, -20
+    sw $ra, 0($sp)
+    sw $s0, 4($sp)
+    sw $s1, 8($sp)
+    sw $s2, 12($sp)
+    sw $s3, 16($sp)
+
+    li $s1, 1              # row = 1..13
+
+diag_row_loop:
+    bgt $s1, 13, diag_done
+
+    li $s0, 4              # col = 4..9
+
+diag_col_loop:
+    bgt $s0, 9, next_diag_row
+
+    lw $s2, ADDR_DSPL
+    sll $t0, $s0, 2
+    add $s2, $s2, $t0
+    sll $t1, $s1, 7
+    add $s2, $s2, $t1      # s2 = display address
+
+    move $a0, $s2
+    jal get_color_grid
+    move $s3, $v0
+    beq $s3, $zero, diag_next_col
+
+    # down-right
+    ble $s0, 7, try_down_right
+    j try_down_left
+
+try_down_right:
+    addi $a0, $s2, 132
+    jal get_color_grid
+    bne $v0, $s3, try_down_left
+
+    addi $a0, $s2, 264
+    jal get_color_grid
+    bne $v0, $s3, try_down_left
+
+    move $a0, $s2
+    jal mark_match
+    addi $a0, $s2, 132
+    jal mark_match
+    addi $a0, $s2, 264
+    jal mark_match
+
+try_down_left:
+    bge $s0, 6, do_down_left
+    j diag_next_col
+
+do_down_left:
+    addi $a0, $s2, 124
+    jal get_color_grid
+    bne $v0, $s3, diag_next_col
+
+    addi $a0, $s2, 248
+    jal get_color_grid
+    bne $v0, $s3, diag_next_col
+
+    move $a0, $s2
+    jal mark_match
+    addi $a0, $s2, 124
+    jal mark_match
+    addi $a0, $s2, 248
+    jal mark_match
+
+diag_next_col:
+    addi $s0, $s0, 1
+    j diag_col_loop
+
+next_diag_row:
+    addi $s1, $s1, 1
+    j diag_row_loop
+
+diag_done:
+    lw $ra, 0($sp)
+    lw $s0, 4($sp)
+    lw $s1, 8($sp)
+    lw $s2, 12($sp)
+    lw $s3, 16($sp)
+    addi $sp, $sp, 20
+    jr $ra
+
+# Clear matched cells from grid and display
+# Return v0 = 1 if anything cleared
+clear_matches:
+    la $t0, grid
+    la $t1, other_grid
+    lw $t2, ADDR_DSPL
+    li $t3, 0
+    li $v0, 0
+
+clear_loop:
+    li $t4, 4096
+    bge $t3, $t4, clear_finish
+
+    lw $t5, 0($t1)
+    beq $t5, $zero, not_clear
+
+    li $v0, 1
+    sw $zero, 0($t0)
+
+    add $t6, $t2, $t3
+    sw $zero, 0($t6)
+
+not_clear:
+    addi $t0, $t0, 4
+    addi $t1, $t1, 4
+    addi $t3, $t3, 4
+    j clear_loop
+
+clear_finish:
+    jr $ra
+
+# Drop remaining gems column by column
+drop_gems:
+    addi $sp, $sp, -8
+    sw $ra, 0($sp)
+    sw $s0, 4($sp)
+
+    li $s0, 4              # playable columns 4..9
+
+drop_col_loop:
+    bgt $s0, 9, drop_done
+    move $a0, $s0
+    jal drop_one_column
+    addi $s0, $s0, 1
+    j drop_col_loop
+
+drop_done:
+    lw $ra, 0($sp)
+    lw $s0, 4($sp)
+    addi $sp, $sp, 8
+    jr $ra
+
+# Input: a0 = playable column index
+drop_one_column:
+    addi $sp, $sp, -24
+    sw $ra, 0($sp)
+    sw $s0, 4($sp)
+    sw $s1, 8($sp)
+    sw $s2, 12($sp)
+    sw $s3, 16($sp)
+    sw $s4, 20($sp)
+
+    move $s0, $a0          # s0 = playable column index
+    li $s1, 15             # start from bottom row
+
+drop_row_loop:
+    blt $s1, 1, drop_col_finish
+
+    # s2 = display address of target cell (col s0, row s1)
+    lw $s2, ADDR_DSPL
+    sll $t0, $s0, 2
+    add $s2, $s2, $t0
+    sll $t1, $s1, 7
+    add $s2, $s2, $t1
+
+    # if target already occupied, go to next row above
+    move $a0, $s2
+    jal get_color_grid
+    bne $v0, $zero, next_drop
+
+    # search upward for nearest gem
+    addi $s3, $s1, -1
+
+find_gem_loop:
+    blt $s3, 1, next_drop
+
+    # s4 = display address of candidate source cell
+    lw $s4, ADDR_DSPL
+    sll $t0, $s0, 2
+    add $s4, $s4, $t0
+    sll $t1, $s3, 7
+    add $s4, $s4, $t1
+
+    move $a0, $s4
+    jal get_color_grid
+    beq $v0, $zero, continue_find
+
+    # Move color from source s4 to target s2 in grid
+    lw $t8, ADDR_DSPL
+
+    sub $t9, $s2, $t8
+    la $t0, grid
+    add $t0, $t0, $t9
+    sw $v0, 0($t0)
+
+    sub $t9, $s4, $t8
+    la $t0, grid
+    add $t0, $t0, $t9
+    sw $zero, 0($t0)
+
+    # Update display
+    sw $v0, 0($s2)
+    sw $zero, 0($s4)
+
+    # done with this target row
+    j next_drop
+
+continue_find:
+    addi $s3, $s3, -1
+    j find_gem_loop
+
+next_drop:
+    addi $s1, $s1, -1
+    j drop_row_loop
+
+drop_col_finish:
+    lw $ra, 0($sp)
+    lw $s0, 4($sp)
+    lw $s1, 8($sp)
+    lw $s2, 12($sp)
+    lw $s3, 16($sp)
+    lw $s4, 20($sp)
+    addi $sp, $sp, 24
+    jr $ra
+
+# Check if one column is full at the top playable row
+# input: a0 = playable column number 4..9
+# output: v0 = 1 if full, 0 otherwise
+check_col_full:
+    addi $sp, $sp, -8
+    sw $ra, 0($sp)
+    sw $t0, 4($sp)
+
+    lw $t0, ADDR_DSPL
+    sll $t1, $a0, 2
+    add $t0, $t0, $t1
+    addi $t0, $t0, 128      # row 1
+
+    move $a0, $t0
+    jal get_color_grid
+    beq $v0, $zero, col_not_full
+
+    li $v0, 1
+    lw $ra, 0($sp)
+    lw $t0, 4($sp)
+    addi $sp, $sp, 8
+    jr $ra
+
+col_not_full:
+    li $v0, 0
+    lw $ra, 0($sp)
+    lw $t0, 4($sp)
+    addi $sp, $sp, 8
+    jr $ra
+
+
+# Check all playable columns 4..9
+# output: v0 = 1 if any column is full, 0 otherwise
+check_any_col_full:
+    addi $sp, $sp, -8
+    sw $ra, 0($sp)
+    sw $s0, 4($sp)
+
+    li $s0, 4
+
+check_any_col_loop:
+    bgt $s0, 9, no_col_full
+    move $a0, $s0
+    jal check_col_full
+    bne $v0, $zero, some_col_full
+    addi $s0, $s0, 1
+    j check_any_col_loop
+
+some_col_full:
+    li $v0, 1
+    lw $ra, 0($sp)
+    lw $s0, 4($sp)
+    addi $sp, $sp, 8
+    jr $ra
+
+no_col_full:
+    li $v0, 0
+    lw $ra, 0($sp)
+    lw $s0, 4($sp)
+    addi $sp, $sp, 8
     jr $ra
 
 draw_hor_line:
