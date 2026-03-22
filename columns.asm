@@ -102,7 +102,7 @@ start_input:
     j wait_start
 
 select_easy:
-    li $t0, 25
+    li $t0, 33
     j set_difficulty
 select_medium:
     li $t0, 17
@@ -120,7 +120,7 @@ begin_game:
     jal draw_new_gem
     jal draw_gem
 
-    # flush the start key so old 'g' does not linger
+    # flush the start key so old input does not linger
     lw $t9, ADDR_KBRD
     lw $t2, 4($t9)
 
@@ -172,23 +172,23 @@ keyboard_input:
     beq $t2, 0x73, respond_to_s   # s
     beq $t2, 0x77, respond_to_w   # w
     beq $t2, 0x71, respond_to_q   # q
-    j game_loop
+    j gravity_tick
 
 respond_to_a:
     jal check_left_collision
-    beq $v0, $zero, game_loop
+    beq $v0, $zero, gravity_tick
     jal delete_gem
     addi $t7, $t7, -4
     jal draw_gem
-    j game_loop
+    j gravity_tick
 
 respond_to_d:
     jal check_right_collision
-    beq $v0, $zero, game_loop
+    beq $v0, $zero, gravity_tick
     jal delete_gem
     addi $t7, $t7, 4
     jal draw_gem
-    j game_loop
+    j gravity_tick
 
 respond_to_s:
     la $t0, gravity_counter
@@ -198,7 +198,7 @@ respond_to_s:
     jal delete_gem
     addi $t7, $t7, 128
     jal draw_gem
-    j game_loop
+    j gravity_tick
 
 respond_to_w:
     la $t6, gem_colors
@@ -209,7 +209,7 @@ respond_to_w:
     sw $t2, 4($t6)
     sw $t1, 0($t6)
     jal draw_gem
-    j game_loop
+    j gravity_tick
 
 respond_to_q:
     li $v0, 10
