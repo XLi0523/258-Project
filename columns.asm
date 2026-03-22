@@ -53,7 +53,6 @@ gameover_string:
 main:
 # Draw the playing field border
     li $t1, 0x999999
-    lw $t0, ADDR_DSPL
     addi $a0, $zero, 3
     addi $a1, $zero, 0
     addi $a2, $zero, 8
@@ -109,17 +108,6 @@ game_loop:
 	# 4. Sleep
 
     # 5. Go back to Step 1
-# check if any column is full at top => game over
-    jal check_any_col_full
-    beq $v0, $zero, game_continue
-
-    li $v0, 4
-    la $a0, gameover_string
-    syscall
-
-    li $v0, 10
-    syscall
-
 game_continue:
     lw $t9, ADDR_KBRD
     lw $t8, 0($t9)
@@ -688,8 +676,8 @@ clear_matches:
     li $t3, 0
     li $v0, 0
 
-clear_loop:
     li $t4, 4096
+clear_loop:
     bge $t3, $t4, clear_finish
 
     lw $t5, 0($t1)
@@ -812,68 +800,6 @@ drop_col_finish:
     lw $s3, 16($sp)
     lw $s4, 20($sp)
     addi $sp, $sp, 24
-    jr $ra
-
-# Check if one column is full at the top playable row
-# input: a0 = playable column number 4..9
-# output: v0 = 1 if full, 0 otherwise
-check_col_full:
-    addi $sp, $sp, -8
-    sw $ra, 0($sp)
-    sw $t0, 4($sp)
-
-    lw $t0, ADDR_DSPL
-    sll $t1, $a0, 2
-    add $t0, $t0, $t1
-    addi $t0, $t0, 128      # row 1
-
-    move $a0, $t0
-    jal get_color_grid
-    beq $v0, $zero, col_not_full
-
-    li $v0, 1
-    lw $ra, 0($sp)
-    lw $t0, 4($sp)
-    addi $sp, $sp, 8
-    jr $ra
-
-col_not_full:
-    li $v0, 0
-    lw $ra, 0($sp)
-    lw $t0, 4($sp)
-    addi $sp, $sp, 8
-    jr $ra
-
-
-# Check all playable columns 4..9
-# output: v0 = 1 if any column is full, 0 otherwise
-check_any_col_full:
-    addi $sp, $sp, -8
-    sw $ra, 0($sp)
-    sw $s0, 4($sp)
-
-    li $s0, 4
-
-check_any_col_loop:
-    bgt $s0, 9, no_col_full
-    move $a0, $s0
-    jal check_col_full
-    bne $v0, $zero, some_col_full
-    addi $s0, $s0, 1
-    j check_any_col_loop
-
-some_col_full:
-    li $v0, 1
-    lw $ra, 0($sp)
-    lw $s0, 4($sp)
-    addi $sp, $sp, 8
-    jr $ra
-
-no_col_full:
-    li $v0, 0
-    lw $ra, 0($sp)
-    lw $s0, 4($sp)
-    addi $sp, $sp, 8
     jr $ra
 
 draw_hor_line:
