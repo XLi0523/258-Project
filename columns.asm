@@ -39,6 +39,7 @@ start_string:
     .asciiz "Press 1 (easy), 2 (medium), 3 (hard) to start. Use a,d,w,s. Press q to quit.\n"
 gameover_string:
     .asciiz "Game Over\n"
+    .align 2
 gravity_counter:
     .word 0
 gravity_threshold:
