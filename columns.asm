@@ -36,13 +36,19 @@ grid:
 other_grid:
     .space 4096  
 start_string:
-    .asciiz "Press g to start. Use a,d,w,s. Press q to quit.\n"
+    .asciiz "Press 1 (easy), 2 (medium), 3 (hard) to start. Use a,d,w,s. Press q to quit.\n"
 gameover_string:
     .asciiz "Game Over\n"
 gravity_counter:
     .word 0
 gravity_threshold:
     .word 17
+gems_landed:
+    .word 0
+gems_per_speedup:
+    .word 5
+min_threshold:
+    .word 3
 ##############################################################################
 # Mutable Data
 ##############################################################################
@@ -88,11 +94,27 @@ wait_start:
 
 start_input:
     lw $t2, 4($t9)
-    beq $t2, 0x67, begin_game   # g
-    beq $t2, 0x71, respond_to_q # q
+    beq $t2, 0x31, select_easy    # 1
+    beq $t2, 0x32, select_medium  # 2
+    beq $t2, 0x33, select_hard    # 3
+    beq $t2, 0x71, respond_to_q   # q
     j wait_start
 
+select_easy:
+    li $t0, 25
+    j set_difficulty
+select_medium:
+    li $t0, 17
+    j set_difficulty
+select_hard:
+    li $t0, 10
+    j set_difficulty
+
+set_difficulty:
+    sw $t0, gravity_threshold
+
 begin_game:
+    sw $zero, gems_landed
     jal clear_grid_memory
     jal draw_new_gem
     jal draw_gem
@@ -194,6 +216,23 @@ respond_to_q:
 
 gem_landed:
     jal store_gems_in_grid
+
+    la $t0, gems_landed
+    lw $t1, 0($t0)
+    addi $t1, $t1, 1
+    sw $t1, 0($t0)
+
+    lw $t2, gems_per_speedup
+    div $t1, $t2
+    mfhi $t3
+    bne $t3, $zero, match_loop
+
+    la $t0, gravity_threshold
+    lw $t1, 0($t0)
+    lw $t2, min_threshold
+    ble $t1, $t2, match_loop
+    addi $t1, $t1, -1
+    sw $t1, 0($t0)
 
 match_loop:
     jal check_matches
