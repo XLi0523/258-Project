@@ -38,7 +38,11 @@ other_grid:
 start_string:
     .asciiz "Press g to start. Use a,d,w,s. Press q to quit.\n"
 gameover_string:
-    .asciiz "Game Over\n"   
+    .asciiz "Game Over\n"
+gravity_counter:
+    .word 0
+gravity_threshold:
+    .word 17
 ##############################################################################
 # Mutable Data
 ##############################################################################
@@ -113,6 +117,23 @@ game_continue:
     lw $t8, 0($t9)
     beq $t8, 1, keyboard_input
 
+gravity_tick:
+    la $t0, gravity_counter
+    lw $t1, 0($t0)
+    addi $t1, $t1, 1
+    sw $t1, 0($t0)
+    lw $t2, gravity_threshold
+    blt $t1, $t2, no_gravity
+    sw $zero, 0($t0)
+
+    jal check_bottom_gem_collision
+    beq $v0, $zero, gem_landed
+    jal delete_gem
+    addi $t7, $t7, 128
+    jal draw_gem
+    j no_gravity
+
+no_gravity:
     jal draw_gem
 
     li $v0, 32
@@ -147,6 +168,8 @@ respond_to_d:
     j game_loop
 
 respond_to_s:
+    la $t0, gravity_counter
+    sw $zero, 0($t0)
     jal check_bottom_gem_collision
     beq $v0, $zero, gem_landed
     jal delete_gem
@@ -193,6 +216,8 @@ no_more_matches:
     jal get_color_grid
     bne $v0, $zero, spawn_blocked
 
+    la $t0, gravity_counter
+    sw $zero, 0($t0)
     jal draw_new_gem
     jal draw_gem
     j game_loop
