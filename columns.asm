@@ -2,7 +2,7 @@
 # This file contains our implementation of Columns.
 #
 # Student 1: Xinyue Li, 1010949583
-# Student 2: Name, Student Number (if applicable)
+# Student 2: Ethan Qiu, 1010862568
 #
 # We assert that the code submitted here is entirely our own 
 # creation, and will indicate otherwise when it is not.
@@ -192,9 +192,29 @@ match_loop:
     j match_loop
 
 no_more_matches:
+    lw $t0, ADDR_DSPL
+    addi $a0, $t0, 152
+    jal get_color_grid
+    bne $v0, $zero, spawn_blocked
+    lw $t0, ADDR_DSPL
+    addi $a0, $t0, 280
+    jal get_color_grid
+    bne $v0, $zero, spawn_blocked
+    lw $t0, ADDR_DSPL
+    addi $a0, $t0, 408
+    jal get_color_grid
+    bne $v0, $zero, spawn_blocked
+
     jal draw_new_gem
     jal draw_gem
     j game_loop
+
+spawn_blocked:
+    li $v0, 4
+    la $a0, gameover_string
+    syscall
+    li $v0, 10
+    syscall
 
 # Functions
 clear_grid_memory:
