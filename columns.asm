@@ -39,9 +39,13 @@ grid:
 other_grid:
     .space 4096  
 start_string:
-    .asciiz "Press 1 (easy), 2 (medium), 3 (hard) to start. Use a,d,w,s. Press q to quit.\n"
+    .asciiz "Press 1 (easy), 2 (medium), 3 (hard) to start. Use a,d,w,s. p=pause, q=quit.\n"
 gameover_string:
     .asciiz "Game Over\n"
+paused_string:
+    .asciiz "Paused\n"
+resumed_string:
+    .asciiz "Resumed\n"
     .align 2
 gravity_counter:
     .word 0
@@ -202,6 +206,7 @@ keyboard_input:
     beq $t2, 0x73, respond_to_s   # s
     beq $t2, 0x77, respond_to_w   # w
     beq $t2, 0x71, respond_to_q   # q
+    beq $t2, 0x70, respond_to_p   # p
     j gravity_tick
 
 respond_to_a:
@@ -239,6 +244,23 @@ respond_to_w:
     sw $t2, 4($t6)
     sw $t1, 0($t6)
     jal draw_gem
+    j gravity_tick
+
+respond_to_p:
+    li $v0, 4
+    la $a0, paused_string
+    syscall
+
+pause_loop:
+    lw $t9, ADDR_KBRD
+    lw $t8, 0($t9)
+    beq $t8, $zero, pause_loop
+    lw $t2, 4($t9)
+    bne $t2, 0x70, pause_loop      # ignore all keys except p
+
+    li $v0, 4
+    la $a0, resumed_string
+    syscall
     j gravity_tick
 
 respond_to_q:
