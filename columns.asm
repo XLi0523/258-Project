@@ -31,6 +31,9 @@ colors:
 # List of gem colors
 gem_colors:
     .word 0x0, 0x0, 0x0
+# Stores the 3 colors of the next vertical column preview
+preview_colors:
+    .word 0x0, 0x0, 0x0    
 grid:
     .space 4096
 other_grid:
@@ -69,6 +72,32 @@ main:
     addi $a1, $zero, 1
     addi $a2, $zero, 15
     jal draw_ver_line
+    
+    # Draw side preview panel border
+
+    # top horizontal line
+    addi $a0, $zero, 12
+    addi $a1, $zero, 0
+    addi $a2, $zero, 6
+    jal draw_hor_line
+
+    # bottom horizontal line
+    addi $a0, $zero, 12
+    addi $a1, $zero, 6
+    addi $a2, $zero, 6
+    jal draw_hor_line
+
+    # left vertical line
+    addi $a0, $zero, 12
+    addi $a1, $zero, 1
+    addi $a2, $zero, 5
+    jal draw_ver_line
+
+    # right vertical line
+    addi $a0, $zero, 17
+    addi $a1, $zero, 1
+    addi $a2, $zero, 5
+    jal draw_ver_line
 
     li $v0, 4
     la $a0, start_string
@@ -90,6 +119,7 @@ start_input:
 
 begin_game:
     jal clear_grid_memory
+    jal init_preview
     jal draw_new_gem
     jal draw_gem
 
@@ -242,23 +272,48 @@ gem_color:
     lw $t1, 0($t4)
     jr $ra
 
+# Generate 3 random colors for the next preview column
+init_preview:
+    addi $sp, $sp, -4
+    sw $ra, 0($sp)
+
+    la $t0, preview_colors
+
+    jal gem_color
+    sw $t1, 0($t0)
+
+    jal gem_color
+    sw $t1, 4($t0)
+
+    jal gem_color
+    sw $t1, 8($t0)
+
+    lw $ra, 0($sp)
+    addi $sp, $sp, 4
+    jr $ra    
+
 draw_new_gem:
     addi $sp, $sp, -4
     sw $ra, 0($sp)
 
     la $t6, gem_colors
+    la $t0, preview_colors
 
-    jal gem_color
+    lw $t1, 0($t0)
     sw $t1, 0($t6)
 
-    jal gem_color
+    lw $t1, 4($t0)
     sw $t1, 4($t6)
 
-    jal gem_color
+    lw $t1, 8($t0)
     sw $t1, 8($t6)
 
     lw $t0, ADDR_DSPL
     addi $t7, $t0, 152
+    
+    jal init_preview
+    
+    jal draw_preview_panel
 
     lw $ra, 0($sp)
     addi $sp, $sp, 4
@@ -800,6 +855,57 @@ drop_col_finish:
     lw $s3, 16($sp)
     lw $s4, 20($sp)
     addi $sp, $sp, 24
+    jr $ra
+
+draw_preview_panel:
+    addi $sp, $sp, -4
+    sw $ra, 0($sp)
+
+    # First clear inside of preview panel to black
+    li $t1, 0x000000
+
+    # clear row 1
+    addi $a0, $zero, 13
+    addi $a1, $zero, 1
+    addi $a2, $zero, 4
+    jal draw_hor_line
+
+    # clear row 2
+    addi $a0, $zero, 13
+    addi $a1, $zero, 2
+    addi $a2, $zero, 4
+    jal draw_hor_line
+
+    # clear row 3
+    addi $a0, $zero, 13
+    addi $a1, $zero, 3
+    addi $a2, $zero, 4
+    jal draw_hor_line
+
+    # clear row 4
+    addi $a0, $zero, 13
+    addi $a1, $zero, 4
+    addi $a2, $zero, 4
+    jal draw_hor_line
+
+    # Draw the preview vertical column
+    la $t0, preview_colors
+    lw $t2, ADDR_DSPL
+
+    # top preview gem at col 14 row 1
+    addi $t2, $t2, 184
+
+    lw $t1, 0($t0)
+    sw $t1, 0($t2)
+
+    lw $t1, 4($t0)
+    sw $t1, 128($t2)
+
+    lw $t1, 8($t0)
+    sw $t1, 256($t2)
+
+    lw $ra, 0($sp)
+    addi $sp, $sp, 4
     jr $ra
 
 draw_hor_line:
