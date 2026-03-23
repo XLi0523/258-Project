@@ -4,7 +4,7 @@
 # Student 1: Xinyue Li, 1010949583
 # Student 2: Ethan Qiu, 1010862568
 #
-# We assert that the code submitted here is entirely our own 
+# We assert that the code submitted here is entirely our own
 # creation, and will indicate otherwise when it is not.
 #
 ######################## Bitmap Display Configuration ########################
@@ -14,30 +14,38 @@
 # - Display height in pixels:   256
 # - Base Address for Display:   0x10008000 ($gp)
 ##############################################################################
+#
+# Features implemented:
+#   Easy 1  - Gravity (column auto-falls each tick)
+#   Easy 2  - Gravity ramps up over time (threshold decreases every 5 gems)
+#   Easy 3  - Difficulty selection (1=easy, 2=medium, 3=hard)
+#   Easy 6  - Pause / resume with p key
+#   Easy 10 - Side panel previewing the next column
+#
+##############################################################################
 
     .data
 ##############################################################################
-# Immutable Data
+# Data
 ##############################################################################
-# The address of the bitmap display. Don't forget to connect it!
 ADDR_DSPL:
     .word 0x10008000
-# The address of the keyboard. Don't forget to connect it!
 ADDR_KBRD:
     .word 0xffff0000
-# List of colors: red, green, blue, yellow, purple, orange
+
 colors:
-    .word 0x00ff0000, 0x0000ff00, 0x000000ff,0x00ffff00, 0x00911ca6, 0x00f5691d
-# List of gem colors
+    .word 0x00ff0000, 0x0000ff00, 0x000000ff, 0x00ffff00, 0x00911ca6, 0x00f5691d
+
 gem_colors:
     .word 0x0, 0x0, 0x0
-# Stores the 3 colors of the next vertical column preview
 preview_colors:
-    .word 0x0, 0x0, 0x0    
+    .word 0x0, 0x0, 0x0
+
 grid:
     .space 4096
 other_grid:
-    .space 4096  
+    .space 4096
+
 start_string:
     .asciiz "Press 1 (easy), 2 (medium), 3 (hard) to start. Use a,d,w,s. p=pause, q=quit.\n"
 gameover_string:
@@ -47,6 +55,7 @@ paused_string:
 resumed_string:
     .asciiz "Resumed\n"
     .align 2
+
 gravity_counter:
     .word 0
 gravity_threshold:
@@ -57,19 +66,14 @@ gems_per_speedup:
     .word 5
 min_threshold:
     .word 3
-##############################################################################
-# Mutable Data
-##############################################################################
+
+    .text
+    .globl main
 
 ##############################################################################
-# Code
+# Milestone 1: Draw the scene
 ##############################################################################
-	.text
-	.globl main
-
-    # Run the game.
 main:
-# Draw the playing field border
     li $t1, 0x999999
     addi $a0, $zero, 3
     addi $a1, $zero, 0
@@ -87,28 +91,19 @@ main:
     addi $a1, $zero, 1
     addi $a2, $zero, 15
     jal draw_ver_line
-    
-    # Draw side preview panel border
 
-    # top horizontal line
     addi $a0, $zero, 12
     addi $a1, $zero, 0
     addi $a2, $zero, 6
     jal draw_hor_line
-
-    # bottom horizontal line
     addi $a0, $zero, 12
     addi $a1, $zero, 6
     addi $a2, $zero, 6
     jal draw_hor_line
-
-    # left vertical line
     addi $a0, $zero, 12
     addi $a1, $zero, 1
     addi $a2, $zero, 5
     jal draw_ver_line
-
-    # right vertical line
     addi $a0, $zero, 17
     addi $a1, $zero, 1
     addi $a2, $zero, 5
@@ -120,6 +115,9 @@ main:
 
     j wait_start
 
+##############################################################################
+# Easy 3: Difficulty selection
+##############################################################################
 wait_start:
     lw $t9, ADDR_KBRD
     lw $t8, 0($t9)
@@ -128,10 +126,10 @@ wait_start:
 
 start_input:
     lw $t2, 4($t9)
-    beq $t2, 0x31, select_easy    # 1
-    beq $t2, 0x32, select_medium  # 2
-    beq $t2, 0x33, select_hard    # 3
-    beq $t2, 0x71, respond_to_q   # q
+    beq $t2, 0x31, select_easy
+    beq $t2, 0x32, select_medium
+    beq $t2, 0x33, select_hard
+    beq $t2, 0x71, respond_to_q
     j wait_start
 
 select_easy:
@@ -154,21 +152,16 @@ begin_game:
     jal draw_new_gem
     jal draw_gem
 
-    # flush the start key so old input does not linger
     lw $t9, ADDR_KBRD
     lw $t2, 4($t9)
 
     j game_loop
-    
-game_loop:
-    # 1a. Check if key has been pressed
-    # 1b. Check which key has been pressed
-    # 2a. Check for collisions
-	# 2b. Update locations (capsules)
-	# 3. Draw the screen
-	# 4. Sleep
 
-    # 5. Go back to Step 1
+##############################################################################
+# Milestone 2: Game loop, movement, controls
+# Easy 1: Gravity
+##############################################################################
+game_loop:
 game_continue:
     lw $t9, ADDR_KBRD
     lw $t8, 0($t9)
@@ -201,12 +194,12 @@ no_gravity:
 
 keyboard_input:
     lw $t2, 4($t9)
-    beq $t2, 0x61, respond_to_a   # a
-    beq $t2, 0x64, respond_to_d   # d
-    beq $t2, 0x73, respond_to_s   # s
-    beq $t2, 0x77, respond_to_w   # w
-    beq $t2, 0x71, respond_to_q   # q
-    beq $t2, 0x70, respond_to_p   # p
+    beq $t2, 0x61, respond_to_a  # a
+    beq $t2, 0x64, respond_to_d  # d
+    beq $t2, 0x73, respond_to_s  # s
+    beq $t2, 0x77, respond_to_w  # w
+    beq $t2, 0x71, respond_to_q  # q
+    beq $t2, 0x70, respond_to_p  # p
     j gravity_tick
 
 respond_to_a:
@@ -225,6 +218,7 @@ respond_to_d:
     jal draw_gem
     j gravity_tick
 
+# Soft drop: reset gravity counter and move down immediately
 respond_to_s:
     la $t0, gravity_counter
     sw $zero, 0($t0)
@@ -235,6 +229,7 @@ respond_to_s:
     jal draw_gem
     j gravity_tick
 
+# Shuffle: cycle the 3 gem colors downward
 respond_to_w:
     la $t6, gem_colors
     lw $t1, 8($t6)
@@ -246,6 +241,9 @@ respond_to_w:
     jal draw_gem
     j gravity_tick
 
+##############################################################################
+# Easy 6: Pause / resume
+##############################################################################
 respond_to_p:
     li $v0, 4
     la $a0, paused_string
@@ -256,7 +254,7 @@ pause_loop:
     lw $t8, 0($t9)
     beq $t8, $zero, pause_loop
     lw $t2, 4($t9)
-    bne $t2, 0x70, pause_loop      # ignore all keys except p
+    bne $t2, 0x70, pause_loop
 
     li $v0, 4
     la $a0, resumed_string
@@ -267,6 +265,10 @@ respond_to_q:
     li $v0, 10
     syscall
 
+##############################################################################
+# Milestone 3: Landing, matching, game over
+# Easy 2: Gravity ramp-up
+##############################################################################
 gem_landed:
     jal store_gems_in_grid
 
@@ -321,7 +323,10 @@ spawn_blocked:
     li $v0, 10
     syscall
 
-# Functions
+##############################################################################
+# Drawing helpers
+##############################################################################
+
 clear_grid_memory:
     la $t0, grid
     li $t1, 0
@@ -359,26 +364,7 @@ gem_color:
     lw $t1, 0($t4)
     jr $ra
 
-# Generate 3 random colors for the next preview column
-init_preview:
-    addi $sp, $sp, -4
-    sw $ra, 0($sp)
-
-    la $t0, preview_colors
-
-    jal gem_color
-    sw $t1, 0($t0)
-
-    jal gem_color
-    sw $t1, 4($t0)
-
-    jal gem_color
-    sw $t1, 8($t0)
-
-    lw $ra, 0($sp)
-    addi $sp, $sp, 4
-    jr $ra    
-
+# Copy preview into gem_colors, generate new preview, update panel
 draw_new_gem:
     addi $sp, $sp, -4
     sw $ra, 0($sp)
@@ -397,9 +383,8 @@ draw_new_gem:
 
     lw $t0, ADDR_DSPL
     addi $t7, $t0, 152
-    
+
     jal init_preview
-    
     jal draw_preview_panel
 
     lw $ra, 0($sp)
@@ -422,6 +407,50 @@ delete_gem:
     sw $t1, 128($t7)
     sw $t1, 256($t7)
     jr $ra
+
+# a0=col, a1=row, a2=length, $t1=color
+draw_hor_line:
+    lw $t0, ADDR_DSPL
+    sll $a0, $a0, 2
+    add $t2, $t0, $a0
+    sll $a1, $a1, 7
+    add $t2, $t2, $a1
+
+    sll $a2, $a2, 2
+    add $t3, $t2, $a2
+
+loop_row_start:
+    beq $t2, $t3, loop_row_end
+    sw $t1, 0($t2)
+    addi $t2, $t2, 4
+    j loop_row_start
+
+loop_row_end:
+    jr $ra
+
+# a0=col, a1=row, a2=length, $t1=color
+draw_ver_line:
+    lw $t0, ADDR_DSPL
+    sll $a0, $a0, 2
+    add $t2, $t0, $a0
+    sll $a1, $a1, 7
+    add $t2, $t2, $a1
+
+    sll $a2, $a2, 7
+    add $t3, $t2, $a2
+
+loop_col_start:
+    beq $t2, $t3, loop_col_end
+    sw $t1, 0($t2)
+    addi $t2, $t2, 128
+    j loop_col_start
+
+loop_col_end:
+    jr $ra
+
+##############################################################################
+# Grid storage helpers
+##############################################################################
 
 store_gems_in_grid:
     addi $sp, $sp, -8
@@ -448,6 +477,7 @@ store_gems_in_grid:
     addi $sp, $sp, 8
     jr $ra
 
+# Return color at display address $a0 from the grid array
 get_color_grid:
     lw $t0, ADDR_DSPL
     sub $t2, $a0, $t0
@@ -455,6 +485,10 @@ get_color_grid:
     add $t3, $t3, $t2
     lw $v0, 0($t3)
     jr $ra
+
+##############################################################################
+# Collision detection helpers
+##############################################################################
 
 check_left_collision:
     addi $sp, $sp, -4
@@ -560,10 +594,10 @@ cannot_move_down:
     jr $ra
 
 ##############################################################################
-# Matching logic
+# Matching helpers
 ##############################################################################
 
-# Clear other_grid, then scan vertical / horizontal / diagonal
+# Scan vertical, horizontal, and diagonal for 3-in-a-row
 check_matches:
     addi $sp, $sp, -4
     sw $ra, 0($sp)
@@ -588,7 +622,6 @@ check_vertical_start:
     addi $sp, $sp, 4
     jr $ra
 
-# Mark a position in other_grid
 mark_match:
     lw $t0, ADDR_DSPL
     sub $t1, $a0, $t0
@@ -598,7 +631,6 @@ mark_match:
     sw $t3, 0($t2)
     jr $ra
 
-# Vertical match check
 check_vertical_matches:
     addi $sp, $sp, -20
     sw $ra, 0($sp)
@@ -607,12 +639,12 @@ check_vertical_matches:
     sw $s2, 12($sp)
     sw $s3, 16($sp)
 
-    li $s0, 4              # col = 4..9
+    li $s0, 4
 
 vertical_col_loop:
     bgt $s0, 9, vertical_done
 
-    li $s1, 1              # row = 1..13
+    li $s1, 1
 
 vertical_row_loop:
     bgt $s1, 13, next_vertical_col
@@ -621,7 +653,7 @@ vertical_row_loop:
     sll $t0, $s0, 2
     add $s2, $s2, $t0
     sll $t1, $s1, 7
-    add $s2, $s2, $t1      # s2 = display address of current cell
+    add $s2, $s2, $t1
 
     move $a0, $s2
     jal get_color_grid
@@ -660,7 +692,6 @@ vertical_done:
     addi $sp, $sp, 20
     jr $ra
 
-# Horizontal match check
 check_horizontal_match:
     addi $sp, $sp, -20
     sw $ra, 0($sp)
@@ -669,12 +700,12 @@ check_horizontal_match:
     sw $s2, 12($sp)
     sw $s3, 16($sp)
 
-    li $s1, 1              # row = 1..15
+    li $s1, 1
 
 horizontal_row_loop:
     bgt $s1, 15, horizontal_done
 
-    li $s0, 4              # col = 4..7
+    li $s0, 4
 
 horizontal_col_loop:
     bgt $s0, 7, next_horizontal_row
@@ -683,7 +714,7 @@ horizontal_col_loop:
     sll $t0, $s0, 2
     add $s2, $s2, $t0
     sll $t1, $s1, 7
-    add $s2, $s2, $t1      # s2 = display address
+    add $s2, $s2, $t1
 
     move $a0, $s2
     jal get_color_grid
@@ -722,7 +753,6 @@ horizontal_done:
     addi $sp, $sp, 20
     jr $ra
 
-# Diagonal match check
 check_diagonal_matches:
     addi $sp, $sp, -20
     sw $ra, 0($sp)
@@ -731,12 +761,12 @@ check_diagonal_matches:
     sw $s2, 12($sp)
     sw $s3, 16($sp)
 
-    li $s1, 1              # row = 1..13
+    li $s1, 1
 
 diag_row_loop:
     bgt $s1, 13, diag_done
 
-    li $s0, 4              # col = 4..9
+    li $s0, 4
 
 diag_col_loop:
     bgt $s0, 9, next_diag_row
@@ -745,14 +775,13 @@ diag_col_loop:
     sll $t0, $s0, 2
     add $s2, $s2, $t0
     sll $t1, $s1, 7
-    add $s2, $s2, $t1      # s2 = display address
+    add $s2, $s2, $t1
 
     move $a0, $s2
     jal get_color_grid
     move $s3, $v0
     beq $s3, $zero, diag_next_col
 
-    # down-right
     ble $s0, 7, try_down_right
     j try_down_left
 
@@ -809,8 +838,11 @@ diag_done:
     addi $sp, $sp, 20
     jr $ra
 
-# Clear matched cells from grid and display
-# Return v0 = 1 if anything cleared
+##############################################################################
+# Clear matches and drop gems
+##############################################################################
+
+# Return v0=1 if anything was cleared
 clear_matches:
     la $t0, grid
     la $t1, other_grid
@@ -840,13 +872,12 @@ not_clear:
 clear_finish:
     jr $ra
 
-# Drop remaining gems column by column
 drop_gems:
     addi $sp, $sp, -8
     sw $ra, 0($sp)
     sw $s0, 4($sp)
 
-    li $s0, 4              # playable columns 4..9
+    li $s0, 4
 
 drop_col_loop:
     bgt $s0, 9, drop_done
@@ -861,7 +892,7 @@ drop_done:
     addi $sp, $sp, 8
     jr $ra
 
-# Input: a0 = playable column index
+# For each empty cell, find the nearest gem above and move it down
 drop_one_column:
     addi $sp, $sp, -24
     sw $ra, 0($sp)
@@ -871,31 +902,27 @@ drop_one_column:
     sw $s3, 16($sp)
     sw $s4, 20($sp)
 
-    move $s0, $a0          # s0 = playable column index
-    li $s1, 15             # start from bottom row
+    move $s0, $a0
+    li $s1, 15
 
 drop_row_loop:
     blt $s1, 1, drop_col_finish
 
-    # s2 = display address of target cell (col s0, row s1)
     lw $s2, ADDR_DSPL
     sll $t0, $s0, 2
     add $s2, $s2, $t0
     sll $t1, $s1, 7
     add $s2, $s2, $t1
 
-    # if target already occupied, go to next row above
     move $a0, $s2
     jal get_color_grid
     bne $v0, $zero, next_drop
 
-    # search upward for nearest gem
     addi $s3, $s1, -1
 
 find_gem_loop:
     blt $s3, 1, next_drop
 
-    # s4 = display address of candidate source cell
     lw $s4, ADDR_DSPL
     sll $t0, $s0, 2
     add $s4, $s4, $t0
@@ -906,7 +933,6 @@ find_gem_loop:
     jal get_color_grid
     beq $v0, $zero, continue_find
 
-    # Move color from source s4 to target s2 in grid
     lw $t8, ADDR_DSPL
 
     sub $t9, $s2, $t8
@@ -919,11 +945,9 @@ find_gem_loop:
     add $t0, $t0, $t9
     sw $zero, 0($t0)
 
-    # Update display
     sw $v0, 0($s2)
     sw $zero, 0($s4)
 
-    # done with this target row
     j next_drop
 
 continue_find:
@@ -944,42 +968,57 @@ drop_col_finish:
     addi $sp, $sp, 24
     jr $ra
 
+##############################################################################
+# Preview panel (Easy 10)
+##############################################################################
+
+init_preview:
+    addi $sp, $sp, -4
+    sw $ra, 0($sp)
+
+    la $t0, preview_colors
+
+    jal gem_color
+    sw $t1, 0($t0)
+
+    jal gem_color
+    sw $t1, 4($t0)
+
+    jal gem_color
+    sw $t1, 8($t0)
+
+    lw $ra, 0($sp)
+    addi $sp, $sp, 4
+    jr $ra
+
 draw_preview_panel:
     addi $sp, $sp, -4
     sw $ra, 0($sp)
 
-    # First clear inside of preview panel to black
     li $t1, 0x000000
 
-    # clear row 1
     addi $a0, $zero, 13
     addi $a1, $zero, 1
     addi $a2, $zero, 4
     jal draw_hor_line
 
-    # clear row 2
     addi $a0, $zero, 13
     addi $a1, $zero, 2
     addi $a2, $zero, 4
     jal draw_hor_line
 
-    # clear row 3
     addi $a0, $zero, 13
     addi $a1, $zero, 3
     addi $a2, $zero, 4
     jal draw_hor_line
 
-    # clear row 4
     addi $a0, $zero, 13
     addi $a1, $zero, 4
     addi $a2, $zero, 4
     jal draw_hor_line
 
-    # Draw the preview vertical column
     la $t0, preview_colors
     lw $t2, ADDR_DSPL
-
-    # top preview gem at col 14 row 1
     addi $t2, $t2, 184
 
     lw $t1, 0($t0)
@@ -993,42 +1032,4 @@ draw_preview_panel:
 
     lw $ra, 0($sp)
     addi $sp, $sp, 4
-    jr $ra
-
-draw_hor_line:
-    lw $t0, ADDR_DSPL
-    sll $a0, $a0, 2
-    add $t2, $t0, $a0
-    sll $a1, $a1, 7
-    add $t2, $t2, $a1
-
-    sll $a2, $a2, 2
-    add $t3, $t2, $a2
-
-loop_row_start:
-    beq $t2, $t3, loop_row_end
-    sw $t1, 0($t2)
-    addi $t2, $t2, 4
-    j loop_row_start
-
-loop_row_end:
-    jr $ra
-
-draw_ver_line:
-    lw $t0, ADDR_DSPL
-    sll $a0, $a0, 2
-    add $t2, $t0, $a0
-    sll $a1, $a1, 7
-    add $t2, $t2, $a1
-
-    sll $a2, $a2, 7
-    add $t3, $t2, $a2
-
-loop_col_start:
-    beq $t2, $t3, loop_col_end
-    sw $t1, 0($t2)
-    addi $t2, $t2, 128
-    j loop_col_start
-
-loop_col_end:
     jr $ra
