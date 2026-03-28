@@ -32,14 +32,23 @@ ADDR_DSPL:
     .word 0x10008000
 ADDR_KBRD:
     .word 0xffff0000
-
+#red, green, blue, yellow, purple, orange, cyan, pink
 colors:
-    .word 0x00ff0000, 0x0000ff00, 0x000000ff, 0x00ffff00, 0x00911ca6, 0x00f5691d
+    .word 0x00ff0000, 0x0000ff00, 0x000000ff, 0x00ffff00, 0x00911ca6, 0x00f5691d, 0x0000ffff, 0x00ff69b4
 
 gem_colors:
     .word 0x0, 0x0, 0x0
 preview_colors:
     .word 0x0, 0x0, 0x0
+
+#Shape IDs:
+#0 = vertical
+#1 = L-right
+#2 = L-left
+current_shape:
+    .word 0
+preview_shape:
+    .word 0
 
 grid:
     .space 4096
@@ -297,19 +306,43 @@ match_loop:
     j match_loop
 
 no_more_matches:
+    la $t9, preview_shape
+    lw $t8, 0($t9)
+    
     lw $t0, ADDR_DSPL
+    
+    #check top spawn call
     addi $a0, $t0, 152
     jal get_color_grid
     bne $v0, $zero, spawn_blocked
-    lw $t0, ADDR_DSPL
+    
+    #check middle spawn call
     addi $a0, $t0, 280
     jal get_color_grid
     bne $v0, $zero, spawn_blocked
-    lw $t0, ADDR_DSPL
+    
+    beq $t8, $zero, check_spawn_vertical
+    beq $t8, 1, check_spawn_L_right
+    j check_spawn_L_left
+
+check_spawn_vertical:
     addi $a0, $t0, 408
     jal get_color_grid
     bne $v0, $zero, spawn_blocked
+    j spawn_ok
 
+check_spawn_L_right:
+    addi $a0, $t0, 284
+    jal get_color_grid
+    bne $v0, $zero, spawn_blocked
+    j spawn_ok
+
+check_spawn_L_left:
+    addi $a0, $t0, 276
+    jal get_color_grid
+    bne $v0, $zero, spawn_blocked
+    
+spawn_ok:    
     la $t0, gravity_counter
     sw $zero, 0($t0)
     jal draw_new_gem
@@ -356,7 +389,7 @@ clear_grid_done:
 gem_color:
     li $v0, 42
     li $a0, 0
-    li $a1, 6
+    li $a1, 8
     syscall
     la $t4, colors
     sll $t5, $a0, 2
@@ -364,11 +397,27 @@ gem_color:
     lw $t1, 0($t4)
     jr $ra
 
+# Generate a random shape ID: 0, 1, 2
+gem_shape:
+    li $v0, 42
+    li $a0, 0
+    li $a1, 3
+    syscall
+    move $v0, $a0
+    jr $ra
+
 # Copy preview into gem_colors, generate new preview, update panel
 draw_new_gem:
     addi $sp, $sp, -4
     sw $ra, 0($sp)
 
+    #Copy preview shape into current shape
+    la $t0, preview_shape
+    lw $t1, 0($t0)
+    la $t2, current_shape
+    sw $t1, 0($t2)
+    
+    #Copy preview colors into current colors
     la $t6, gem_colors
     la $t0, preview_colors
 
@@ -393,21 +442,64 @@ draw_new_gem:
 
 draw_gem:
     la $t6, gem_colors
+    la $t9, current_shape
+    lw $t8, 0($t9)        #current shape
+    
+    #draw top gem
     lw $t1, 0($t6)
     sw $t1, 0($t7)
+    
+    beq $t8, $zero, draw_gem_vertical
+    beq $t8, 1, draw_gem_L_right
+    
+    #shape 2 = L-left
+draw_gem_L_left:
+    lw $t1, 4($t6)
+    sw $t1, 128($t7)
+    lw $t1, 8($t6)
+    sw $t1, 124($t7)
+    jr $ra
+
+draw_gem_L_right:
+    lw $t1, 4($t6)
+    sw $t1, 128($t7)
+    lw $t1, 8($t6)
+    sw $t1, 132($t7)
+    jr $ra
+
+draw_gem_vertical:
     lw $t1, 4($t6)
     sw $t1, 128($t7)
     lw $t1, 8($t6)
     sw $t1, 256($t7)
     jr $ra
-
+    
 delete_gem:
     li $t1, 0x000000
+    la $t9, current_shape
+    lw $t8, 0($t9)
+    
+    #erase top gem
     sw $t1, 0($t7)
+    
+    beq $t8, $zero, delete_vertical
+    beq $t8, 1, delete_L_right
+    
+    #shape 2 = L-left
+delete_L_left:
+    sw $t1, 128($t7)
+    sw $t1, 124($t7)
+    jr $ra
+
+delete_L_right:
+    sw $t1, 128($t7)
+    sw $t1, 132($t7)
+    jr $ra
+
+delete_vertical:
     sw $t1, 128($t7)
     sw $t1, 256($t7)
     jr $ra
-
 # a0=col, a1=row, a2=length, $t1=color
 draw_hor_line:
     lw $t0, ADDR_DSPL
@@ -462,21 +554,43 @@ store_gems_in_grid:
     sub $t2, $t7, $t0
     la $t3, grid
     add $t3, $t3, $t2
+    
+    la $t9, current_shape
+    lw $t8, 0($t9)
 
+    #Store top gem
     lw $t1, 0($t6)
     sw $t1, 0($t3)
 
+    beq $t8, $zero, store_vertical
+    beq $t8, 1, store_L_right
+    
+    #Shape 2 = L-left
+store_L_left:
     lw $t1, 4($t6)
     sw $t1, 128($t3)
+    lw $t1, 8($t6)
+    sw $t1, 124($t3)
+    j store_done
 
+store_L_right:
+    lw $t1, 4($t6)
+    sw $t1, 128($t3)
+    lw $t1, 8($t6)
+    sw $t1, 132($t3)
+    j store_done
+    
+store_vertical:
+    lw $t1, 4($t6)
+    sw $t1, 128($t3)
     lw $t1, 8($t6)
     sw $t1, 256($t3)
-
+    
+store_done:
     lw $ra, 0($sp)
     lw $t0, 4($sp)
     addi $sp, $sp, 8
     jr $ra
-
 # Return color at display address $a0 from the grid array
 get_color_grid:
     lw $t0, ADDR_DSPL
@@ -499,14 +613,30 @@ check_left_collision:
     andi $t2, $t1, 0x7f
     srl $t2, $t2, 2
 
+    la $t9, current_shape
+    lw $t8, 0($t9)
+    
     li $t3, 4
+    beq $t8, 2, left_Lleft_bound
+    j left_bound_check
+
+left_Lleft_bound:
+    li $t3, 5
+    
+left_bound_check:    
     ble $t2, $t3, cannot_move_left
 
+    #left of top
     addi $t4, $t7, -4
     move $a0, $t4
     jal get_color_grid
     bne $v0, $zero, cannot_move_left
 
+    beq $t8, $zero, left_vertical_gems
+    beq $t8, 1, left_Lright_gems
+    j left_Lleft_gems
+
+left_vertical_gems:    
     addi $t4, $t7, 124
     move $a0, $t4
     jal get_color_grid
@@ -516,7 +646,33 @@ check_left_collision:
     move $a0, $t4
     jal get_color_grid
     bne $v0, $zero, cannot_move_left
+    j left_ok
 
+left_Lright_gems:
+    addi $t4, $t7, 124
+    move $a0, $t4
+    jal get_color_grid
+    bne $v0, $zero, cannot_move_left
+    
+    addi $t4, $t7, 128
+    move $a0, $t4
+    jal get_color_grid
+    bne $v0, $zero, cannot_move_left
+    j left_ok
+
+left_Lleft_gems:
+    addi $t4, $t7, 124
+    move $a0, $t4
+    jal get_color_grid
+    bne $v0, $zero, cannot_move_left
+    
+    addi $t4, $t7, 120
+    move $a0, $t4
+    jal get_color_grid
+    bne $v0, $zero, cannot_move_left
+    j left_ok
+    
+left_ok:
     li $v0, 1
     lw $ra, 0($sp)
     addi $sp, $sp, 4
@@ -537,14 +693,30 @@ check_right_collision:
     andi $t2, $t1, 0x7f
     srl $t2, $t2, 2
 
+    la $t9, current_shape
+    lw $t8, 0($t9)
+
     li $t3, 9
+    beq $t8, 1, right_Lright_bound
+    j right_bound_check
+ 
+right_Lright_bound:
+    li $t3, 8
+ 
+right_bound_check:    
     bge $t2, $t3, cannot_move_right
 
+    #right of top
     addi $t4, $t7, 4
     move $a0, $t4
     jal get_color_grid
     bne $v0, $zero, cannot_move_right
+    
+    beq $t8, $zero, right_vertical_gems
+    beq $t8, 1, right_Lright_gems
+    j right_Lleft_gems
 
+right_vertical_gems:
     addi $t4, $t7, 132
     move $a0, $t4
     jal get_color_grid
@@ -554,7 +726,33 @@ check_right_collision:
     move $a0, $t4
     jal get_color_grid
     bne $v0, $zero, cannot_move_right
+    j right_ok
 
+right_Lright_gems:
+    addi $t4, $t7, 132
+    move $a0, $t4
+    jal get_color_grid
+    bne $v0, $zero, cannot_move_right
+    
+    addi $t4, $t7, 136
+    move $a0, $t4
+    jal get_color_grid
+    bne $v0, $zero, cannot_move_right
+    j right_ok
+    
+right_Lleft_gems:
+    addi $t4, $t7, 128
+    move $a0, $t4
+    jal get_color_grid
+    bne $v0, $zero, cannot_move_right
+    
+    addi $t4, $t7, 132
+    move $a0, $t4
+    jal get_color_grid
+    bne $v0, $zero, cannot_move_right
+    j right_ok
+
+right_ok:
     li $v0, 1
     lw $ra, 0($sp)
     addi $sp, $sp, 4
@@ -574,14 +772,51 @@ check_bottom_gem_collision:
     sub $t1, $t7, $t0
     srl $t2, $t1, 7
 
-    li $t3, 13
-    bge $t2, $t3, cannot_move_down
+    la $t9, current_shape
+    lw $t8, 0($t9)
 
+    li $t3, 13
+    beq $t8, $zero, bottom_row_bound
+    li $t3, 14
+
+bottom_row_bound:    
+    bge $t2, $t3, cannot_move_down
+    
+    beq $t8, $zero, bottom_vertical_gems
+    beq $t8, 1, bottom_Lright_gems
+    j bottom_Lleft_gems
+
+bottom_vertical_gems:
     addi $t4, $t7, 384
     move $a0, $t4
     jal get_color_grid
     bne $v0, $zero, cannot_move_down
+    j bottom_ok
 
+bottom_Lright_gems:
+    addi $t4, $t7, 256
+    move $a0, $t4
+    jal get_color_grid
+    bne $v0, $zero, cannot_move_down
+    
+    addi $t4, $t7, 260
+    move $a0, $t4
+    jal get_color_grid
+    bne $v0, $zero, cannot_move_down
+    j bottom_ok
+    
+bottom_Lleft_gems:
+    addi $t4, $t7, 252
+    move $a0, $t4
+    jal get_color_grid
+    bne $v0, $zero, cannot_move_down
+    
+    addi $t4, $t7, 256
+    move $a0, $t4
+    jal get_color_grid
+    bne $v0, $zero, cannot_move_down
+    
+bottom_ok:
     li $v0, 1
     lw $ra, 0($sp)
     addi $sp, $sp, 4
@@ -975,7 +1210,13 @@ drop_col_finish:
 init_preview:
     addi $sp, $sp, -4
     sw $ra, 0($sp)
+    
+    #Generate preview shape
+    jal gem_shape
+    la $t0, preview_shape
+    sw $v0, 0($t0)
 
+    #Generate preview colors
     la $t0, preview_colors
 
     jal gem_color
@@ -1018,18 +1259,41 @@ draw_preview_panel:
     jal draw_hor_line
 
     la $t0, preview_colors
+    la $t9, preview_shape
+    lw $t8, 0($t9)
+    
     lw $t2, ADDR_DSPL
-    addi $t2, $t2, 184
+    addi $t2, $t2, 184        #preview top position
 
+    #top gem
     lw $t1, 0($t0)
     sw $t1, 0($t2)
 
+    beq $t8, $zero, preview_vertical
+    beq $t8, 1, preview_L_right
+    
+    #shape 2 = L-left
+preview_L_left:
     lw $t1, 4($t0)
     sw $t1, 128($t2)
+    lw $t1, 8($t0)
+    sw $t1, 124($t2)
+    j preview_done
 
+preview_L_right:
+    lw $t1, 4($t0)
+    sw $t1, 128($t2)
+    lw $t1, 8($t0)
+    sw $t1, 132($t2)
+    j preview_done
+
+preview_vertical:
+    lw $t1, 4($t0)
+    sw $t1, 128($t2)
     lw $t1, 8($t0)
     sw $t1, 256($t2)
 
+preview_done:
     lw $ra, 0($sp)
     addi $sp, $sp, 4
     jr $ra
