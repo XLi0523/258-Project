@@ -56,6 +56,7 @@ resumed_string:
     .asciiz "Resumed\n"
     .align 2
 
+
 gravity_counter:
     .word 0
 gravity_threshold:
@@ -248,6 +249,7 @@ respond_to_p:
     li $v0, 4
     la $a0, paused_string
     syscall
+    jal draw_pause_text
 
 pause_loop:
     lw $t9, ADDR_KBRD
@@ -256,6 +258,7 @@ pause_loop:
     lw $t2, 4($t9)
     bne $t2, 0x70, pause_loop
 
+    jal erase_pause_text
     li $v0, 4
     la $a0, resumed_string
     syscall
@@ -1032,4 +1035,208 @@ draw_preview_panel:
 
     lw $ra, 0($sp)
     addi $sp, $sp, 4
+    jr $ra
+
+##############################################################################
+# Pause overlay: draw / erase "PAUSED" on the bitmap display
+##############################################################################
+
+draw_pause_text:
+    lw $t0, ADDR_DSPL
+    li $t1, 0x00ffffff
+
+    # P (col 7-9): ##. / #.# / ##. / #.. / #..
+    sw $t1, 2588($t0)
+    sw $t1, 2592($t0)
+    sw $t1, 2716($t0)
+    sw $t1, 2724($t0)
+    sw $t1, 2844($t0)
+    sw $t1, 2848($t0)
+    sw $t1, 2972($t0)
+    sw $t1, 3100($t0)
+
+    # A (col 11-13): .#. / #.# / ### / #.# / #.#
+    sw $t1, 2608($t0)
+    sw $t1, 2732($t0)
+    sw $t1, 2740($t0)
+    sw $t1, 2860($t0)
+    sw $t1, 2864($t0)
+    sw $t1, 2868($t0)
+    sw $t1, 2988($t0)
+    sw $t1, 2996($t0)
+    sw $t1, 3116($t0)
+    sw $t1, 3124($t0)
+
+    # U (col 15-17): #.# / #.# / #.# / #.# / .#.
+    sw $t1, 2620($t0)
+    sw $t1, 2628($t0)
+    sw $t1, 2748($t0)
+    sw $t1, 2756($t0)
+    sw $t1, 2876($t0)
+    sw $t1, 2884($t0)
+    sw $t1, 3004($t0)
+    sw $t1, 3012($t0)
+    sw $t1, 3136($t0)
+
+    # S (col 19-21): .## / #.. / .#. / ..# / ##.
+    sw $t1, 2640($t0)
+    sw $t1, 2644($t0)
+    sw $t1, 2764($t0)
+    sw $t1, 2896($t0)
+    sw $t1, 3028($t0)
+    sw $t1, 3148($t0)
+    sw $t1, 3152($t0)
+
+    # E (col 23-25): ### / #.. / ##. / #.. / ###
+    sw $t1, 2652($t0)
+    sw $t1, 2656($t0)
+    sw $t1, 2660($t0)
+    sw $t1, 2780($t0)
+    sw $t1, 2908($t0)
+    sw $t1, 2912($t0)
+    sw $t1, 3036($t0)
+    sw $t1, 3164($t0)
+    sw $t1, 3168($t0)
+    sw $t1, 3172($t0)
+
+    # D (col 27-29): ##. / #.# / #.# / #.# / ##.
+    sw $t1, 2668($t0)
+    sw $t1, 2672($t0)
+    sw $t1, 2796($t0)
+    sw $t1, 2804($t0)
+    sw $t1, 2924($t0)
+    sw $t1, 2932($t0)
+    sw $t1, 3052($t0)
+    sw $t1, 3060($t0)
+    sw $t1, 3180($t0)
+    sw $t1, 3184($t0)
+
+    jr $ra
+
+erase_pause_text:
+    lw $t0, ADDR_DSPL
+    li $t1, 0x000000
+
+    # Erase 23 columns x 5 rows starting at offset 2588
+    # Row 0 (offsets 2588 .. 2676)
+    sw $t1, 2588($t0)
+    sw $t1, 2592($t0)
+    sw $t1, 2596($t0)
+    sw $t1, 2600($t0)
+    sw $t1, 2604($t0)
+    sw $t1, 2608($t0)
+    sw $t1, 2612($t0)
+    sw $t1, 2616($t0)
+    sw $t1, 2620($t0)
+    sw $t1, 2624($t0)
+    sw $t1, 2628($t0)
+    sw $t1, 2632($t0)
+    sw $t1, 2636($t0)
+    sw $t1, 2640($t0)
+    sw $t1, 2644($t0)
+    sw $t1, 2648($t0)
+    sw $t1, 2652($t0)
+    sw $t1, 2656($t0)
+    sw $t1, 2660($t0)
+    sw $t1, 2664($t0)
+    sw $t1, 2668($t0)
+    sw $t1, 2672($t0)
+    sw $t1, 2676($t0)
+    # Row 1 (offsets 2716 .. 2804)
+    sw $t1, 2716($t0)
+    sw $t1, 2720($t0)
+    sw $t1, 2724($t0)
+    sw $t1, 2728($t0)
+    sw $t1, 2732($t0)
+    sw $t1, 2736($t0)
+    sw $t1, 2740($t0)
+    sw $t1, 2744($t0)
+    sw $t1, 2748($t0)
+    sw $t1, 2752($t0)
+    sw $t1, 2756($t0)
+    sw $t1, 2760($t0)
+    sw $t1, 2764($t0)
+    sw $t1, 2768($t0)
+    sw $t1, 2772($t0)
+    sw $t1, 2776($t0)
+    sw $t1, 2780($t0)
+    sw $t1, 2784($t0)
+    sw $t1, 2788($t0)
+    sw $t1, 2792($t0)
+    sw $t1, 2796($t0)
+    sw $t1, 2800($t0)
+    sw $t1, 2804($t0)
+    # Row 2 (offsets 2844 .. 2932)
+    sw $t1, 2844($t0)
+    sw $t1, 2848($t0)
+    sw $t1, 2852($t0)
+    sw $t1, 2856($t0)
+    sw $t1, 2860($t0)
+    sw $t1, 2864($t0)
+    sw $t1, 2868($t0)
+    sw $t1, 2872($t0)
+    sw $t1, 2876($t0)
+    sw $t1, 2880($t0)
+    sw $t1, 2884($t0)
+    sw $t1, 2888($t0)
+    sw $t1, 2892($t0)
+    sw $t1, 2896($t0)
+    sw $t1, 2900($t0)
+    sw $t1, 2904($t0)
+    sw $t1, 2908($t0)
+    sw $t1, 2912($t0)
+    sw $t1, 2916($t0)
+    sw $t1, 2920($t0)
+    sw $t1, 2924($t0)
+    sw $t1, 2928($t0)
+    sw $t1, 2932($t0)
+    # Row 3 (offsets 2972 .. 3060)
+    sw $t1, 2972($t0)
+    sw $t1, 2976($t0)
+    sw $t1, 2980($t0)
+    sw $t1, 2984($t0)
+    sw $t1, 2988($t0)
+    sw $t1, 2992($t0)
+    sw $t1, 2996($t0)
+    sw $t1, 3000($t0)
+    sw $t1, 3004($t0)
+    sw $t1, 3008($t0)
+    sw $t1, 3012($t0)
+    sw $t1, 3016($t0)
+    sw $t1, 3020($t0)
+    sw $t1, 3024($t0)
+    sw $t1, 3028($t0)
+    sw $t1, 3032($t0)
+    sw $t1, 3036($t0)
+    sw $t1, 3040($t0)
+    sw $t1, 3044($t0)
+    sw $t1, 3048($t0)
+    sw $t1, 3052($t0)
+    sw $t1, 3056($t0)
+    sw $t1, 3060($t0)
+    # Row 4 (offsets 3100 .. 3188)
+    sw $t1, 3100($t0)
+    sw $t1, 3104($t0)
+    sw $t1, 3108($t0)
+    sw $t1, 3112($t0)
+    sw $t1, 3116($t0)
+    sw $t1, 3120($t0)
+    sw $t1, 3124($t0)
+    sw $t1, 3128($t0)
+    sw $t1, 3132($t0)
+    sw $t1, 3136($t0)
+    sw $t1, 3140($t0)
+    sw $t1, 3144($t0)
+    sw $t1, 3148($t0)
+    sw $t1, 3152($t0)
+    sw $t1, 3156($t0)
+    sw $t1, 3160($t0)
+    sw $t1, 3164($t0)
+    sw $t1, 3168($t0)
+    sw $t1, 3172($t0)
+    sw $t1, 3176($t0)
+    sw $t1, 3180($t0)
+    sw $t1, 3184($t0)
+    sw $t1, 3188($t0)
+
     jr $ra
