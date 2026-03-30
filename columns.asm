@@ -68,6 +68,26 @@ gems_per_speedup:
 min_threshold:
     .word 3
 
+# Background music state
+music_index:
+    .word 0
+music_timer:
+    .word 0
+
+# Clotho theme (Columns, Sega Genesis) - extracted from clotho.mid
+# Track 1 arpeggiated accompaniment, all eighth notes (8 game ticks each)
+# Am section: A4-E4-C5-E4 / B4-E4-A4-E4 / G#4-E4-B4-E4 / A4-E4-G#4-E4
+# G/D section: G4-D4-B4-D4 / A4-D4-G4-D4 / F#4-D4-G4-D4 / A4-D4-G4-D4
+melody_pitches:
+    .word 69, 64, 72, 64, 71, 64, 69, 64   # Am arpeggio
+    .word 68, 64, 71, 64, 69, 64, 68, 64   # E/G# arpeggio
+    .word 67, 62, 71, 62, 69, 62, 67, 62   # G/D arpeggio
+    .word 66, 62, 67, 62, 69, 62, 67, 62   # D/F# -> G -> Am resolve
+melody_length:
+    .word 32
+melody_note_dur:
+    .word 8                                  # constant: 8 ticks per note (240 ms)
+
     .text
     .globl main
 
@@ -153,6 +173,11 @@ begin_game:
     jal draw_new_gem
     jal draw_gem
 
+    # Initialize music: index=0, timer=1 (plays first note immediately)
+    sw $zero, music_index
+    li $t0, 1
+    sw $t0, music_timer
+
     lw $t9, ADDR_KBRD
     lw $t2, 4($t9)
 
@@ -186,6 +211,7 @@ gravity_tick:
 
 no_gravity:
     jal draw_gem
+    jal music_tick
 
     li $v0, 32
     li $a0, 30
@@ -1035,6 +1061,50 @@ draw_preview_panel:
 
     lw $ra, 0($sp)
     addi $sp, $sp, 4
+    jr $ra
+
+##############################################################################
+# Background music: play one note per timer expiry using async MIDI (syscall 31)
+##############################################################################
+
+music_tick:
+    la $t0, music_timer
+    lw $t1, 0($t0)
+    addi $t1, $t1, -1
+    sw $t1, 0($t0)
+    bgtz $t1, music_done       # note still playing, nothing to do
+
+    # Timer expired -- reset timer and load next note
+    lw $t5, melody_note_dur    # constant duration (8 ticks)
+    la $t0, music_timer
+    sw $t5, 0($t0)
+
+    la $t0, music_index
+    lw $t1, 0($t0)
+
+    la $t2, melody_pitches
+    sll $t3, $t1, 2
+    add $t2, $t2, $t3
+    lw $t4, 0($t2)             # $t4 = pitch
+
+    # Advance index (wrap around to loop)
+    addi $t1, $t1, 1
+    lw $t2, melody_length
+    blt $t1, $t2, music_no_wrap
+    li $t1, 0
+music_no_wrap:
+    sw $t1, 0($t0)
+
+    # syscall 31: async MIDI out
+    # $a0 = pitch, $a1 = duration ms, $a2 = instrument, $a3 = volume
+    move $a0, $t4
+    li $a1, 240                 # 8 ticks * 30 ms = 240 ms
+    li $a2, 19                  # Church Organ (matches original MIDI)
+    li $a3, 80                  # volume
+    li $v0, 31
+    syscall
+
+music_done:
     jr $ra
 
 ##############################################################################
