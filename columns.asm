@@ -21,6 +21,8 @@
 #   Easy 3  - Difficulty selection (1=easy, 2=medium, 3=hard)
 #   Easy 6  - Pause / resume with p key
 #   Easy 10 - Side panel previewing the next column
+#   Hard 2  - Additional shapes (vertical, L-right, L-left) and colours
+#             (red, green, blue, yellow, purple, orange, cyan, pink)
 #   Hard 5  - Background music (Clotho theme via async MIDI)
 #
 ##############################################################################
@@ -33,7 +35,8 @@ ADDR_DSPL:
     .word 0x10008000
 ADDR_KBRD:
     .word 0xffff0000
-#red, green, blue, yellow, purple, orange, cyan, pink
+# Hard 2 — 8 gem colours (standard Columns uses 3-6)
+# red, green, blue, yellow, purple, orange, cyan, pink
 colors:
     .word 0x00ff0000, 0x0000ff00, 0x000000ff, 0x00ffff00, 0x00911ca6, 0x00f5691d, 0x0000ffff, 0x00ff69b4
 
@@ -42,10 +45,15 @@ gem_colors:
 preview_colors:
     .word 0x0, 0x0, 0x0
 
-#Shape IDs:
-#0 = vertical
-#1 = L-right
-#2 = L-left
+# Hard 2 — 3 piece shapes (standard Columns uses only vertical)
+# Shape IDs:
+#   0 = vertical  (3 gems stacked:  X )
+#                                   X
+#                                   X
+#   1 = L-right   (L-shape right:   X )
+#                                   X X
+#   2 = L-left    (L-shape left:    X )
+#                                 X X
 current_shape:
     .word 0
 preview_shape:
@@ -336,12 +344,14 @@ match_loop:
     j match_loop
 
 no_more_matches:
+    # Hard 2 — Spawn-blocked check varies by shape: different shapes
+    #           occupy different cells, so we must check each one
     la $t9, preview_shape
     lw $t8, 0($t9)
-    
+
     lw $t0, ADDR_DSPL
-    
-    #check top spawn call
+
+    # check top spawn cell (common to all shapes)
     addi $a0, $t0, 152
     jal get_color_grid
     bne $v0, $zero, spawn_blocked
@@ -416,10 +426,13 @@ clear_other_loop:
 clear_grid_done:
     jr $ra
 
+# Hard 2 — Pick a random colour from the 8-colour palette
+# Uses syscall 42 (RNG) with range 0..7, indexes into colors array
+# Returns colour in $t1
 gem_color:
     li $v0, 42
     li $a0, 0
-    li $a1, 8
+    li $a1, 8              # 8 colours (Hard 2: expanded from default 3)
     syscall
     la $t4, colors
     sll $t5, $a0, 2
@@ -427,7 +440,8 @@ gem_color:
     lw $t1, 0($t4)
     jr $ra
 
-# Generate a random shape ID: 0, 1, 2
+# Hard 2 — Pick a random shape ID: 0 (vertical), 1 (L-right), 2 (L-left)
+# Uses syscall 42 (RNG) with range 0..2, returns shape ID in $v0
 gem_shape:
     li $v0, 42
     li $a0, 0
@@ -470,19 +484,23 @@ draw_new_gem:
     addi $sp, $sp, 4
     jr $ra
 
+# Hard 2 — Draw the active piece on the bitmap display
+# Branches on current_shape to place 3 gems in the correct layout
+# $t7 = display address of the top gem; offsets are in bytes
+#   +128 = one row down (32 pixels * 4 bytes), +4/-4 = one col right/left
 draw_gem:
     la $t6, gem_colors
     la $t9, current_shape
-    lw $t8, 0($t9)        #current shape
-    
-    #draw top gem
+    lw $t8, 0($t9)        # load current shape ID (0/1/2)
+
+    # draw top gem (common to all shapes)
     lw $t1, 0($t6)
     sw $t1, 0($t7)
-    
+
     beq $t8, $zero, draw_gem_vertical
     beq $t8, 1, draw_gem_L_right
-    
-    #shape 2 = L-left
+
+    # shape 2 = L-left: middle below top, bottom one col left of middle
 draw_gem_L_left:
     lw $t1, 4($t6)
     sw $t1, 128($t7)
@@ -490,13 +508,15 @@ draw_gem_L_left:
     sw $t1, 124($t7)
     jr $ra
 
+# shape 1 = L-right: middle below top, bottom one col right of middle
 draw_gem_L_right:
     lw $t1, 4($t6)
-    sw $t1, 128($t7)
+    sw $t1, 128($t7)      # +128 = one row down
     lw $t1, 8($t6)
-    sw $t1, 132($t7)
+    sw $t1, 132($t7)      # +132 = one row down + one col right
     jr $ra
 
+# shape 0 = vertical: all 3 gems stacked in one column
 draw_gem_vertical:
     lw $t1, 4($t6)
     sw $t1, 128($t7)
@@ -504,18 +524,20 @@ draw_gem_vertical:
     sw $t1, 256($t7)
     jr $ra
     
+# Hard 2 — Erase the active piece (write black to each gem cell)
+# Same shape-branching logic as draw_gem
 delete_gem:
     li $t1, 0x000000
     la $t9, current_shape
     lw $t8, 0($t9)
-    
-    #erase top gem
+
+    # erase top gem (common to all shapes)
     sw $t1, 0($t7)
-    
+
     beq $t8, $zero, delete_vertical
     beq $t8, 1, delete_L_right
-    
-    #shape 2 = L-left
+
+    # shape 2 = L-left
 delete_L_left:
     sw $t1, 128($t7)
     sw $t1, 124($t7)
@@ -632,6 +654,8 @@ get_color_grid:
 
 ##############################################################################
 # Collision detection helpers
+# Hard 2 — Each collision check branches on shape ID because different
+#           shapes occupy different cells and have different boundary columns
 ##############################################################################
 
 check_left_collision:
