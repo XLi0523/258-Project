@@ -21,6 +21,7 @@
 #   Easy 3  - Difficulty selection (1=easy, 2=medium, 3=hard)
 #   Easy 6  - Pause / resume with p key
 #   Easy 10 - Side panel previewing the next column
+#   Hard 5  - Background music (Clotho theme via async MIDI)
 #
 ##############################################################################
 
@@ -1064,7 +1065,7 @@ draw_preview_panel:
     jr $ra
 
 ##############################################################################
-# Background music: play one note per timer expiry using async MIDI (syscall 31)
+# Hard 5: Background music (Clotho theme via async MIDI)
 ##############################################################################
 
 music_tick:
