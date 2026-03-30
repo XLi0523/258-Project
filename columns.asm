@@ -21,6 +21,7 @@
 #   Easy 3  - Difficulty selection (1=easy, 2=medium, 3=hard)
 #   Easy 6  - Pause / resume with p key
 #   Easy 10 - Side panel previewing the next column
+#   Hard 5  - Background music (Clotho theme via async MIDI)
 #
 ##############################################################################
 
@@ -65,6 +66,7 @@ resumed_string:
     .asciiz "Resumed\n"
     .align 2
 
+
 gravity_counter:
     .word 0
 gravity_threshold:
@@ -75,6 +77,26 @@ gems_per_speedup:
     .word 5
 min_threshold:
     .word 3
+
+# Background music state
+music_index:
+    .word 0
+music_timer:
+    .word 0
+
+# Clotho theme (Columns, Sega Genesis) - extracted from clotho.mid
+# Track 1 arpeggiated accompaniment, all eighth notes (8 game ticks each)
+# Am section: A4-E4-C5-E4 / B4-E4-A4-E4 / G#4-E4-B4-E4 / A4-E4-G#4-E4
+# G/D section: G4-D4-B4-D4 / A4-D4-G4-D4 / F#4-D4-G4-D4 / A4-D4-G4-D4
+melody_pitches:
+    .word 69, 64, 72, 64, 71, 64, 69, 64   # Am arpeggio
+    .word 68, 64, 71, 64, 69, 64, 68, 64   # E/G# arpeggio
+    .word 67, 62, 71, 62, 69, 62, 67, 62   # G/D arpeggio
+    .word 66, 62, 67, 62, 69, 62, 67, 62   # D/F# -> G -> Am resolve
+melody_length:
+    .word 32
+melody_note_dur:
+    .word 8                                  # constant: 8 ticks per note (240 ms)
 
     .text
     .globl main
@@ -161,6 +183,11 @@ begin_game:
     jal draw_new_gem
     jal draw_gem
 
+    # Initialize music: index=0, timer=1 (plays first note immediately)
+    sw $zero, music_index
+    li $t0, 1
+    sw $t0, music_timer
+
     lw $t9, ADDR_KBRD
     lw $t2, 4($t9)
 
@@ -194,6 +221,7 @@ gravity_tick:
 
 no_gravity:
     jal draw_gem
+    jal music_tick
 
     li $v0, 32
     li $a0, 30
@@ -257,6 +285,7 @@ respond_to_p:
     li $v0, 4
     la $a0, paused_string
     syscall
+    jal draw_pause_text
 
 pause_loop:
     lw $t9, ADDR_KBRD
@@ -265,6 +294,7 @@ pause_loop:
     lw $t2, 4($t9)
     bne $t2, 0x70, pause_loop
 
+    jal erase_pause_text
     li $v0, 4
     la $a0, resumed_string
     syscall
@@ -1296,4 +1326,252 @@ preview_vertical:
 preview_done:
     lw $ra, 0($sp)
     addi $sp, $sp, 4
+    jr $ra
+
+##############################################################################
+# Hard 5: Background music (Clotho theme via async MIDI)
+##############################################################################
+
+music_tick:
+    la $t0, music_timer
+    lw $t1, 0($t0)
+    addi $t1, $t1, -1
+    sw $t1, 0($t0)
+    bgtz $t1, music_done       # note still playing, nothing to do
+
+    # Timer expired -- reset timer and load next note
+    lw $t5, melody_note_dur    # constant duration (8 ticks)
+    la $t0, music_timer
+    sw $t5, 0($t0)
+
+    la $t0, music_index
+    lw $t1, 0($t0)
+
+    la $t2, melody_pitches
+    sll $t3, $t1, 2
+    add $t2, $t2, $t3
+    lw $t4, 0($t2)             # $t4 = pitch
+
+    # Advance index (wrap around to loop)
+    addi $t1, $t1, 1
+    lw $t2, melody_length
+    blt $t1, $t2, music_no_wrap
+    li $t1, 0
+music_no_wrap:
+    sw $t1, 0($t0)
+
+    # syscall 31: async MIDI out
+    # $a0 = pitch, $a1 = duration ms, $a2 = instrument, $a3 = volume
+    move $a0, $t4
+    li $a1, 240                 # 8 ticks * 30 ms = 240 ms
+    li $a2, 19                  # Church Organ (matches original MIDI)
+    li $a3, 80                  # volume
+    li $v0, 31
+    syscall
+
+music_done:
+    jr $ra
+
+##############################################################################
+# Pause overlay: draw / erase "PAUSED" on the bitmap display
+##############################################################################
+
+draw_pause_text:
+    lw $t0, ADDR_DSPL
+    li $t1, 0x00ffffff
+
+    # P (col 7-9): ##. / #.# / ##. / #.. / #..
+    sw $t1, 2588($t0)
+    sw $t1, 2592($t0)
+    sw $t1, 2716($t0)
+    sw $t1, 2724($t0)
+    sw $t1, 2844($t0)
+    sw $t1, 2848($t0)
+    sw $t1, 2972($t0)
+    sw $t1, 3100($t0)
+
+    # A (col 11-13): .#. / #.# / ### / #.# / #.#
+    sw $t1, 2608($t0)
+    sw $t1, 2732($t0)
+    sw $t1, 2740($t0)
+    sw $t1, 2860($t0)
+    sw $t1, 2864($t0)
+    sw $t1, 2868($t0)
+    sw $t1, 2988($t0)
+    sw $t1, 2996($t0)
+    sw $t1, 3116($t0)
+    sw $t1, 3124($t0)
+
+    # U (col 15-17): #.# / #.# / #.# / #.# / .#.
+    sw $t1, 2620($t0)
+    sw $t1, 2628($t0)
+    sw $t1, 2748($t0)
+    sw $t1, 2756($t0)
+    sw $t1, 2876($t0)
+    sw $t1, 2884($t0)
+    sw $t1, 3004($t0)
+    sw $t1, 3012($t0)
+    sw $t1, 3136($t0)
+
+    # S (col 19-21): .## / #.. / .#. / ..# / ##.
+    sw $t1, 2640($t0)
+    sw $t1, 2644($t0)
+    sw $t1, 2764($t0)
+    sw $t1, 2896($t0)
+    sw $t1, 3028($t0)
+    sw $t1, 3148($t0)
+    sw $t1, 3152($t0)
+
+    # E (col 23-25): ### / #.. / ##. / #.. / ###
+    sw $t1, 2652($t0)
+    sw $t1, 2656($t0)
+    sw $t1, 2660($t0)
+    sw $t1, 2780($t0)
+    sw $t1, 2908($t0)
+    sw $t1, 2912($t0)
+    sw $t1, 3036($t0)
+    sw $t1, 3164($t0)
+    sw $t1, 3168($t0)
+    sw $t1, 3172($t0)
+
+    # D (col 27-29): ##. / #.# / #.# / #.# / ##.
+    sw $t1, 2668($t0)
+    sw $t1, 2672($t0)
+    sw $t1, 2796($t0)
+    sw $t1, 2804($t0)
+    sw $t1, 2924($t0)
+    sw $t1, 2932($t0)
+    sw $t1, 3052($t0)
+    sw $t1, 3060($t0)
+    sw $t1, 3180($t0)
+    sw $t1, 3184($t0)
+
+    jr $ra
+
+erase_pause_text:
+    lw $t0, ADDR_DSPL
+    li $t1, 0x000000
+
+    # Erase 23 columns x 5 rows starting at offset 2588
+    # Row 0 (offsets 2588 .. 2676)
+    sw $t1, 2588($t0)
+    sw $t1, 2592($t0)
+    sw $t1, 2596($t0)
+    sw $t1, 2600($t0)
+    sw $t1, 2604($t0)
+    sw $t1, 2608($t0)
+    sw $t1, 2612($t0)
+    sw $t1, 2616($t0)
+    sw $t1, 2620($t0)
+    sw $t1, 2624($t0)
+    sw $t1, 2628($t0)
+    sw $t1, 2632($t0)
+    sw $t1, 2636($t0)
+    sw $t1, 2640($t0)
+    sw $t1, 2644($t0)
+    sw $t1, 2648($t0)
+    sw $t1, 2652($t0)
+    sw $t1, 2656($t0)
+    sw $t1, 2660($t0)
+    sw $t1, 2664($t0)
+    sw $t1, 2668($t0)
+    sw $t1, 2672($t0)
+    sw $t1, 2676($t0)
+    # Row 1 (offsets 2716 .. 2804)
+    sw $t1, 2716($t0)
+    sw $t1, 2720($t0)
+    sw $t1, 2724($t0)
+    sw $t1, 2728($t0)
+    sw $t1, 2732($t0)
+    sw $t1, 2736($t0)
+    sw $t1, 2740($t0)
+    sw $t1, 2744($t0)
+    sw $t1, 2748($t0)
+    sw $t1, 2752($t0)
+    sw $t1, 2756($t0)
+    sw $t1, 2760($t0)
+    sw $t1, 2764($t0)
+    sw $t1, 2768($t0)
+    sw $t1, 2772($t0)
+    sw $t1, 2776($t0)
+    sw $t1, 2780($t0)
+    sw $t1, 2784($t0)
+    sw $t1, 2788($t0)
+    sw $t1, 2792($t0)
+    sw $t1, 2796($t0)
+    sw $t1, 2800($t0)
+    sw $t1, 2804($t0)
+    # Row 2 (offsets 2844 .. 2932)
+    sw $t1, 2844($t0)
+    sw $t1, 2848($t0)
+    sw $t1, 2852($t0)
+    sw $t1, 2856($t0)
+    sw $t1, 2860($t0)
+    sw $t1, 2864($t0)
+    sw $t1, 2868($t0)
+    sw $t1, 2872($t0)
+    sw $t1, 2876($t0)
+    sw $t1, 2880($t0)
+    sw $t1, 2884($t0)
+    sw $t1, 2888($t0)
+    sw $t1, 2892($t0)
+    sw $t1, 2896($t0)
+    sw $t1, 2900($t0)
+    sw $t1, 2904($t0)
+    sw $t1, 2908($t0)
+    sw $t1, 2912($t0)
+    sw $t1, 2916($t0)
+    sw $t1, 2920($t0)
+    sw $t1, 2924($t0)
+    sw $t1, 2928($t0)
+    sw $t1, 2932($t0)
+    # Row 3 (offsets 2972 .. 3060)
+    sw $t1, 2972($t0)
+    sw $t1, 2976($t0)
+    sw $t1, 2980($t0)
+    sw $t1, 2984($t0)
+    sw $t1, 2988($t0)
+    sw $t1, 2992($t0)
+    sw $t1, 2996($t0)
+    sw $t1, 3000($t0)
+    sw $t1, 3004($t0)
+    sw $t1, 3008($t0)
+    sw $t1, 3012($t0)
+    sw $t1, 3016($t0)
+    sw $t1, 3020($t0)
+    sw $t1, 3024($t0)
+    sw $t1, 3028($t0)
+    sw $t1, 3032($t0)
+    sw $t1, 3036($t0)
+    sw $t1, 3040($t0)
+    sw $t1, 3044($t0)
+    sw $t1, 3048($t0)
+    sw $t1, 3052($t0)
+    sw $t1, 3056($t0)
+    sw $t1, 3060($t0)
+    # Row 4 (offsets 3100 .. 3188)
+    sw $t1, 3100($t0)
+    sw $t1, 3104($t0)
+    sw $t1, 3108($t0)
+    sw $t1, 3112($t0)
+    sw $t1, 3116($t0)
+    sw $t1, 3120($t0)
+    sw $t1, 3124($t0)
+    sw $t1, 3128($t0)
+    sw $t1, 3132($t0)
+    sw $t1, 3136($t0)
+    sw $t1, 3140($t0)
+    sw $t1, 3144($t0)
+    sw $t1, 3148($t0)
+    sw $t1, 3152($t0)
+    sw $t1, 3156($t0)
+    sw $t1, 3160($t0)
+    sw $t1, 3164($t0)
+    sw $t1, 3168($t0)
+    sw $t1, 3172($t0)
+    sw $t1, 3176($t0)
+    sw $t1, 3180($t0)
+    sw $t1, 3184($t0)
+    sw $t1, 3188($t0)
+
     jr $ra
